@@ -91,8 +91,6 @@ ios/Podfile.lock
 # ===========================================================================
 # Binaries and templates
 bin/
-pkg/
-src/
 
 # Tools-specific binaries
 *.exe
@@ -150,3 +148,7 @@ $RECYCLE.BIN/
 !.vscode/extensions.json
 .history/
 *.code-workspace
+.gitnexus
+.claude/
+AGENTS.md
+CLAUDE.md
