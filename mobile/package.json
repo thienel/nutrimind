@@ -10,6 +10,7 @@
     "@shopify/flash-list": "^2.3.1",
     "@tanstack/react-query": "^5.100.14",
     "axios": "^1.16.1",
+    "babel-preset-expo": "~56.0.14",
     "expo": "~56.0.8",
     "expo-auth-session": "^56.0.13",
     "expo-camera": "^56.0.7",
@@ -51,6 +52,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-expo-modules-jsi.js",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
