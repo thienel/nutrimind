@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "NutriMind",
+    "slug": "nutrimind",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "nutrimind",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nutrimind",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.nutrimind",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.451492936968-p94s2eumqap59i0q8uof4n2r88ffsgqs"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f771082c-f4bc-4681-a2a1-f68ba08be6c2"
+      }
+    }
+  }
+}
