@@ -2,6 +2,7 @@ package serviceimpl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/thienel/tlog"
@@ -16,28 +17,53 @@ import (
 )
 
 type authServiceImpl struct {
-	userRepo        repository.UserRepository
-	jwtService      service.JWTService
-	googleClientID  string
+	userRepo         repository.UserRepository
+	jwtService       service.JWTService
+	googleClientIDs  []string
 }
 
-// NewAuthService creates a new auth service
+// NewAuthService creates a new auth service.
+// googleClientIDs accepts Web and/or iOS Client IDs — token audience is matched against each.
 func NewAuthService(
 	userRepo repository.UserRepository,
 	jwtService service.JWTService,
-	googleClientID string,
+	googleClientIDs ...string,
 ) service.AuthService {
-	return &authServiceImpl{
-		userRepo:       userRepo,
-		jwtService:     jwtService,
-		googleClientID: googleClientID,
+	ids := make([]string, 0, len(googleClientIDs))
+	for _, id := range googleClientIDs {
+		if id != "" {
+			ids = append(ids, id)
+		}
 	}
+	return &authServiceImpl{
+		userRepo:        userRepo,
+		jwtService:      jwtService,
+		googleClientIDs: ids,
+	}
+}
+
+// validateGoogleToken tries each configured client ID until one validates successfully.
+// This is necessary because Android tokens use the Web Client ID as audience while
+// iOS tokens use the iOS Client ID.
+func (s *authServiceImpl) validateGoogleToken(ctx context.Context, idToken string) (*idtoken.Payload, error) {
+	var lastErr error
+	for _, clientID := range s.googleClientIDs {
+		payload, err := idtoken.Validate(ctx, idToken, clientID)
+		if err == nil {
+			return payload, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, errors.New("no google client IDs configured")
 }
 
 // GoogleSignIn verifies a Google ID token, creates or finds the user, and returns a signed app token.
 func (s *authServiceImpl) GoogleSignIn(ctx context.Context, idToken string) (*dto.GoogleSignInResponse, error) {
 	// 1. Verify Google ID token with Google's public keys
-	payload, err := idtoken.Validate(ctx, idToken, s.googleClientID)
+	payload, err := s.validateGoogleToken(ctx, idToken)
 	if err != nil {
 		tlog.Debug("Google ID token validation failed", zap.Error(err))
 		return nil, apperror.ErrUnauthorized.WithMessage("Google token không hợp lệ").WithError(err)

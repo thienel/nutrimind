@@ -27,7 +27,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 		cfg.JWT.Secret,
 		cfg.JWT.AppExpiryDays,
 	)
-	authService := serviceimpl.NewAuthService(userRepo, jwtService, cfg.Google.ClientID)
+	authService := serviceimpl.NewAuthService(userRepo, jwtService, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
 	userService := serviceimpl.NewUserService(userRepo)
 
 	// Middleware

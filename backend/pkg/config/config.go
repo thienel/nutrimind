@@ -62,7 +62,8 @@ type RateLimitConfig struct {
 
 // GoogleConfig holds Google OAuth configuration
 type GoogleConfig struct {
-	ClientID string `env:"GOOGLE_CLIENT_ID"`
+	ClientID    string `env:"GOOGLE_CLIENT_ID"`
+	ClientIDIOS string `env:"GOOGLE_CLIENT_ID_IOS"`
 }
 
 // Config holds all application configuration
