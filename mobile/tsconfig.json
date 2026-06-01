@@ -2,16 +2,15 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "baseUrl": ".",
     "paths": {
-      "@features/*": ["src/features/*"],
-      "@shared/*": ["src/shared/*"],
-      "@services/*": ["src/services/*"],
-      "@database/*": ["src/database/*"],
-      "@utils/*": ["src/utils/*"],
-      "@prompts/*": ["src/prompts/*"],
-      "@types/*": ["src/types/*"],
-      "@app/*": ["src/app/*"]
+      "@features/*": ["./src/features/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@services/*": ["./src/services/*"],
+      "@database/*": ["./src/database/*"],
+      "@utils/*": ["./src/utils/*"],
+      "@prompts/*": ["./src/prompts/*"],
+      "@t/*": ["./src/types/*"],
+      "@app/*": ["./src/app/*"]
     }
   }
 }

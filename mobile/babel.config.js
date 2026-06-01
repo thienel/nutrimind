@@ -15,7 +15,7 @@ module.exports = function (api) {
             '@database': './src/database',
             '@utils': './src/utils',
             '@prompts': './src/prompts',
-            '@types': './src/types',
+            '@t': './src/types',
             '@app': './src/app',
           },
         },
