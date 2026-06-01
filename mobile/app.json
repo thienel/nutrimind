@@ -9,7 +9,10 @@
     "scheme": "nutrimind",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nutrimind"
+      "bundleIdentifier": "com.nutrimind",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.nutrimind",
@@ -31,6 +34,11 @@
           "iosUrlScheme": "com.googleusercontent.apps.PLACEHOLDER_IOS_CLIENT_ID"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f771082c-f4bc-4681-a2a1-f68ba08be6c2"
+      }
+    }
   }
 }
