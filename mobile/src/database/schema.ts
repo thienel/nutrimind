@@ -6,6 +6,8 @@ export const schema = [
 		email TEXT NOT NULL UNIQUE,
 		display_name TEXT NOT NULL,
 		photo_url TEXT,
+		gender TEXT CHECK (gender IN ('male', 'female')),
+		date_of_birth TEXT,
 		role TEXT NOT NULL CHECK (role IN ('user', 'admin')),
 		status TEXT NOT NULL CHECK (status IN ('active', 'inactive')),
 		created_at TEXT NOT NULL,
@@ -46,9 +48,11 @@ export const schema = [
 		measured_at TEXT NOT NULL,
 		height_cm REAL,
 		weight_kg REAL,
+		age INTEGER,
 		bmi REAL,
 		bmr REAL,
 		tdee REAL,
+		water_target_ml INTEGER,
 		body_fat_pct REAL,
 		activity_level TEXT,
 		goal TEXT CHECK (goal IN ('lose', 'maintain', 'gain')),
@@ -76,5 +80,5 @@ export const schema = [
 	'CREATE INDEX IF NOT EXISTS idx_meals_user_eaten_at ON meals (user_id, eaten_at);',
 	'CREATE INDEX IF NOT EXISTS idx_water_user_logged_at ON water (user_id, logged_at);',
 	'CREATE INDEX IF NOT EXISTS idx_health_metrics_user_measured_at ON health_metrics (user_id, measured_at);',
-	'CREATE INDEX IF NOT EXISTS idx_reminders_user_enabled ON reminders (user_id, enabled);'
+	'CREATE INDEX IF NOT EXISTS idx_reminders_user_enabled ON reminders (user_id, enabled);',
 ];
