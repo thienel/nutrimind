@@ -6,7 +6,11 @@ import {
 } from '@react-native-google-signin/google-signin';
 import * as SecureStore from 'expo-secure-store';
 import { Config } from '@shared/constants/config';
-import axiosClient, { SECURE_STORE_KEYS } from '@services/api/axiosClient';
+import axiosClient, {
+	SECURE_STORE_KEYS,
+	persistTokens,
+	clearTokens,
+} from '@services/api/axiosClient';
 import type { User } from '@t/user.types';
 import type { ApiResponse, BackendSignInResponse, BackendUserResponse } from '@t/api.types';
 import { mapBackendUser } from '@t/api.types';
@@ -15,6 +19,8 @@ export interface SignInResult {
 	user: User;
 	appToken: string;
 	expiresIn: number;
+	refreshToken: string;
+	refreshExpiresIn: number;
 	isFirstLogin: boolean;
 }
 
@@ -47,27 +53,46 @@ export const authService = {
 			throw new Error(resp.error?.message ?? 'Authentication failed');
 		}
 
-		const { user: rawUser, app_token, expires_in, is_first_login } = resp.data;
-		await SecureStore.setItemAsync(SECURE_STORE_KEYS.APP_TOKEN, app_token);
+		const {
+			user: rawUser,
+			app_token,
+			expires_in,
+			refresh_token,
+			refresh_expires_in,
+			is_first_login,
+		} = resp.data;
+
+		// Persist both tokens to device secure storage (Keychain / Keystore)
+		await persistTokens(app_token, refresh_token, expires_in);
 
 		return {
 			user: mapBackendUser(rawUser),
 			appToken: app_token,
 			expiresIn: expires_in,
+			refreshToken: refresh_token,
+			refreshExpiresIn: refresh_expires_in,
 			isFirstLogin: is_first_login,
 		};
 	},
 
+	/**
+	 * Sign out: revoke Google session (best-effort) and clear all local tokens.
+	 */
 	async signOut(): Promise<void> {
 		try {
 			await GoogleSignin.signOut();
 		} catch {
 			// Google sign-out is best-effort; always clear local state
 		}
-		await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.APP_TOKEN);
+		await clearTokens();
 		await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.ONBOARDING_COMPLETE);
 	},
 
+	/**
+	 * Fetch the current user's profile from the backend.
+	 * Returns null if no token is stored or the request fails.
+	 * The axiosClient will attempt a silent refresh on 401 before this returns null.
+	 */
 	async getMe(): Promise<User | null> {
 		try {
 			const { data: resp } = await axiosClient.get<ApiResponse<BackendUserResponse>>(

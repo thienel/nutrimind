@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import { useEffect } from 'react';
 import type { User } from '@t/user.types';
 import { authService } from '@features/auth/services/authService';
+import { authLogoutEmitter } from '@services/api/axiosClient';
 
 interface AuthState {
   user: User | null;
@@ -12,11 +14,12 @@ interface AuthState {
 interface AuthActions {
   init: () => Promise<void>;
   setSignedIn: (user: User, isFirstLogin: boolean) => Promise<void>;
+  signOut: () => Promise<void>;
   clearAuth: () => void;
   completeOnboarding: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState & AuthActions>((set) => ({
+export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
@@ -43,6 +46,15 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
     set({ user, isAuthenticated: true, isOnboardingComplete: onboardingComplete });
   },
 
+  /**
+   * Explicit sign-out: calls Google sign-out, clears all stored tokens,
+   * then resets local auth state.
+   */
+  signOut: async () => {
+    await authService.signOut();
+    get().clearAuth();
+  },
+
   clearAuth: () => {
     set({ user: null, isAuthenticated: false, isOnboardingComplete: false });
   },
@@ -52,3 +64,14 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
     set({ isOnboardingComplete: true });
   },
 }));
+
+export function useAuthLogoutListener(): void {
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+
+  useEffect(() => {
+    const unsubscribe = authLogoutEmitter.on(() => {
+      clearAuth();
+    });
+    return unsubscribe;
+  }, [clearAuth]);
+}
