@@ -23,10 +23,25 @@ type GoogleSignInRequest struct {
 
 // GoogleSignInResponse represents the successful sign-in response
 type GoogleSignInResponse struct {
-	User         UserResponse `json:"user"`
-	AppToken     string       `json:"app_token"`
-	ExpiresIn    int          `json:"expires_in"` // seconds
-	IsFirstLogin bool         `json:"is_first_login"`
+	User              UserResponse `json:"user"`
+	AppToken          string       `json:"app_token"`
+	ExpiresIn         int          `json:"expires_in"`          // app token lifetime in seconds
+	RefreshToken      string       `json:"refresh_token"`
+	RefreshExpiresIn  int          `json:"refresh_expires_in"`  // refresh token lifetime in seconds
+	IsFirstLogin      bool         `json:"is_first_login"`
+}
+
+// RefreshTokenRequest represents the token refresh request body
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// RefreshTokenResponse represents the new token pair after a successful refresh
+type RefreshTokenResponse struct {
+	AppToken         string `json:"app_token"`
+	ExpiresIn        int    `json:"expires_in"`         // app token lifetime in seconds
+	RefreshToken     string `json:"refresh_token"`
+	RefreshExpiresIn int    `json:"refresh_expires_in"` // refresh token lifetime in seconds
 }
 
 // UpdateUserRequest represents user update request (admin)
