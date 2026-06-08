@@ -84,8 +84,21 @@ export interface BackendUserResponse {
 export interface BackendSignInResponse {
 	user: BackendUserResponse;
 	app_token: string;
-	expires_in: number;
+	expires_in: number;          // app token lifetime in seconds
+	refresh_token: string;
+	refresh_expires_in: number;  // refresh token lifetime in seconds
 	is_first_login: boolean;
+}
+
+/**
+ * Response from POST /api/auth/refresh.
+ * Matches `dto.RefreshTokenResponse`.
+ */
+export interface RefreshTokenResponse {
+	app_token: string;
+	expires_in: number;          // app token lifetime in seconds
+	refresh_token: string;
+	refresh_expires_in: number;  // refresh token lifetime in seconds
 }
 
 /**

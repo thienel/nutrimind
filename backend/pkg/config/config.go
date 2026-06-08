@@ -29,8 +29,9 @@ type DatabaseConfig struct {
 
 // JWTConfig holds JWT authentication configuration
 type JWTConfig struct {
-	Secret         string `env:"JWT_SECRET" env-default:"change-this-secret-in-production-min-32-chars"`
-	AppExpiryDays  int    `env:"JWT_APP_EXPIRY_DAYS" env-default:"30"`
+	Secret              string `env:"JWT_SECRET" env-default:"change-this-secret-in-production-min-32-chars"`
+	AppExpiryDays       int    `env:"JWT_APP_EXPIRY_DAYS" env-default:"30"`
+	RefreshExpiryDays   int    `env:"JWT_REFRESH_EXPIRY_DAYS" env-default:"90"`
 }
 
 // LogConfig holds logging configuration
