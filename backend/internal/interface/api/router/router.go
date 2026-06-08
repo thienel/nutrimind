@@ -52,8 +52,11 @@ func SetupRouter(
 func (r *routeRegister) registerAuthRoutes(rg *gin.RouterGroup) {
 	auth := rg.Group("/auth")
 	{
-		// Public: exchange Google ID token for app token
+		// Public: exchange Google ID token for app token + refresh token
 		auth.POST("/google", r.auth.GoogleSignIn)
+
+		// Public: exchange a valid refresh token for a new token pair (silent re-auth)
+		auth.POST("/refresh", r.auth.RefreshToken)
 
 		// Protected: get current user
 		auth.GET("/me", r.mw.Auth(), r.auth.GetMe)

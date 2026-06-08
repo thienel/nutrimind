@@ -17,9 +17,9 @@ import (
 )
 
 type authServiceImpl struct {
-	userRepo         repository.UserRepository
-	jwtService       service.JWTService
-	googleClientIDs  []string
+	userRepo        repository.UserRepository
+	jwtService      service.JWTService
+	googleClientIDs []string
 }
 
 // NewAuthService creates a new auth service.
@@ -60,7 +60,20 @@ func (s *authServiceImpl) validateGoogleToken(ctx context.Context, idToken strin
 	return nil, errors.New("no google client IDs configured")
 }
 
-// GoogleSignIn verifies a Google ID token, creates or finds the user, and returns a signed app token.
+// generateTokenPair generates both an app token and a refresh token for a user.
+func (s *authServiceImpl) generateTokenPair(user *entity.User) (appToken, refreshToken string, err error) {
+	appToken, err = s.jwtService.GenerateAppToken(user.ID, user.GoogleID, user.Role)
+	if err != nil {
+		return "", "", fmt.Errorf("generate app token: %w", err)
+	}
+	refreshToken, err = s.jwtService.GenerateRefreshToken(user.ID, user.GoogleID, user.Role)
+	if err != nil {
+		return "", "", fmt.Errorf("generate refresh token: %w", err)
+	}
+	return appToken, refreshToken, nil
+}
+
+// GoogleSignIn verifies a Google ID token, creates or finds the user, and returns a signed token pair.
 func (s *authServiceImpl) GoogleSignIn(ctx context.Context, idToken string) (*dto.GoogleSignInResponse, error) {
 	// 1. Verify Google ID token with Google's public keys
 	payload, err := s.validateGoogleToken(ctx, idToken)
@@ -129,10 +142,10 @@ func (s *authServiceImpl) GoogleSignIn(ctx context.Context, idToken string) (*dt
 		return nil, apperror.ErrForbidden.WithMessage("Tài khoản đã bị vô hiệu hóa")
 	}
 
-	// 7. Generate app token (30 days)
-	appToken, err := s.jwtService.GenerateAppToken(user.ID, user.GoogleID, user.Role)
+	// 7. Generate token pair (app token + refresh token)
+	appToken, refreshToken, err := s.generateTokenPair(user)
 	if err != nil {
-		return nil, apperror.ErrInternalServerError.WithMessage("Không thể tạo app token").WithError(err)
+		return nil, apperror.ErrInternalServerError.WithMessage("Không thể tạo token").WithError(err)
 	}
 
 	tlog.Info("User signed in via Google",
@@ -152,8 +165,45 @@ func (s *authServiceImpl) GoogleSignIn(ctx context.Context, idToken string) (*dt
 			CreatedAt:   user.CreatedAt,
 			UpdatedAt:   user.UpdatedAt,
 		},
-		AppToken:     appToken,
-		ExpiresIn:    s.jwtService.GetAppExpirySeconds(),
-		IsFirstLogin: isFirstLogin,
+		AppToken:         appToken,
+		ExpiresIn:        s.jwtService.GetAppExpirySeconds(),
+		RefreshToken:     refreshToken,
+		RefreshExpiresIn: s.jwtService.GetRefreshExpirySeconds(),
+		IsFirstLogin:     isFirstLogin,
+	}, nil
+}
+
+// RefreshToken validates a refresh token and issues a new token pair (token rotation).
+func (s *authServiceImpl) RefreshToken(ctx context.Context, refreshToken string) (*dto.RefreshTokenResponse, error) {
+	// 1. Validate the refresh token signature and expiry
+	claims, err := s.jwtService.ValidateRefreshToken(refreshToken)
+	if err != nil {
+		return nil, apperror.ErrUnauthorized.WithMessage("Refresh token không hợp lệ hoặc đã hết hạn")
+	}
+
+	// 2. Verify the user still exists and is active in DB
+	user, err := s.userRepo.FindByID(ctx, claims.UserID)
+	if err != nil {
+		return nil, apperror.ErrUnauthorized.WithMessage("Người dùng không tồn tại")
+	}
+	if user.Status != entity.UserStatusActive {
+		return nil, apperror.ErrForbidden.WithMessage("Tài khoản đã bị vô hiệu hóa")
+	}
+
+	// 3. Generate a brand-new token pair (rotation — old refresh token is now superseded)
+	newAppToken, newRefreshToken, err := s.generateTokenPair(user)
+	if err != nil {
+		return nil, apperror.ErrInternalServerError.WithMessage("Không thể tạo token mới").WithError(err)
+	}
+
+	tlog.Info("Token refreshed",
+		zap.Uint("user_id", user.ID),
+	)
+
+	return &dto.RefreshTokenResponse{
+		AppToken:         newAppToken,
+		ExpiresIn:        s.jwtService.GetAppExpirySeconds(),
+		RefreshToken:     newRefreshToken,
+		RefreshExpiresIn: s.jwtService.GetRefreshExpirySeconds(),
 	}, nil
 }

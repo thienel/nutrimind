@@ -4,10 +4,16 @@ import "nutrimind-backend/internal/domain/valueobject"
 
 // JWTService defines JWT operations
 type JWTService interface {
-	// GenerateAppToken generates a long-lived app token (30 days per SRS §6.7)
+	// GenerateAppToken generates a short-lived app token (30 days per SRS §6.7)
 	GenerateAppToken(userID uint, googleID, role string) (string, error)
-	// ValidateToken validates a JWT token and returns claims
+	// GenerateRefreshToken generates a long-lived refresh token (90 days)
+	GenerateRefreshToken(userID uint, googleID, role string) (string, error)
+	// ValidateToken validates a JWT app token and returns claims
 	ValidateToken(tokenString string) (*valueobject.JWTClaims, error)
+	// ValidateRefreshToken validates a refresh JWT and returns claims
+	ValidateRefreshToken(tokenString string) (*valueobject.JWTClaims, error)
 	// GetAppExpirySeconds returns the app token expiry in seconds
 	GetAppExpirySeconds() int
+	// GetRefreshExpirySeconds returns the refresh token expiry in seconds
+	GetRefreshExpirySeconds() int
 }

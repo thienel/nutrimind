@@ -14,6 +14,7 @@ import (
 // AuthHandler interface
 type AuthHandler interface {
 	GoogleSignIn(c *gin.Context)
+	RefreshToken(c *gin.Context)
 	GetMe(c *gin.Context)
 }
 
@@ -32,7 +33,7 @@ func NewAuthHandler(authService service.AuthService, userService service.UserSer
 
 // GoogleSignIn godoc
 // @Summary     Sign in with Google
-// @Description Verifies a Google ID token and returns a signed app token
+// @Description Verifies a Google ID token and returns a signed app token + refresh token
 // @Tags        auth
 // @Accept      json
 // @Produce     json
@@ -53,6 +54,31 @@ func (h *authHandlerImpl) GoogleSignIn(c *gin.Context) {
 	}
 
 	response.OK(c, resp, "Đăng nhập thành công")
+}
+
+// RefreshToken godoc
+// @Summary     Refresh token pair
+// @Description Validates a refresh token and issues a new app token + refresh token (token rotation)
+// @Tags        auth
+// @Accept      json
+// @Produce     json
+// @Param       body body dto.RefreshTokenRequest true "Refresh token"
+// @Success     200 {object} dto.RefreshTokenResponse
+// @Router      /api/auth/refresh [post]
+func (h *authHandlerImpl) RefreshToken(c *gin.Context) {
+	var req dto.RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.WriteErrorResponse(c, apperror.ErrBadRequest.WithMessage("refresh_token là bắt buộc"))
+		return
+	}
+
+	resp, err := h.authService.RefreshToken(c.Request.Context(), req.RefreshToken)
+	if err != nil {
+		response.WriteErrorResponse(c, err)
+		return
+	}
+
+	response.OK(c, resp, "Token đã được làm mới")
 }
 
 // GetMe godoc
