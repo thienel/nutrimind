@@ -44,6 +44,11 @@ type RefreshTokenResponse struct {
 	RefreshExpiresIn int    `json:"refresh_expires_in"` // refresh token lifetime in seconds
 }
 
+// SignOutRequest represents the sign-out request body
+type SignOutRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 // UpdateUserRequest represents user update request (admin)
 type UpdateUserRequest struct {
 	Role   string `json:"role,omitempty"`

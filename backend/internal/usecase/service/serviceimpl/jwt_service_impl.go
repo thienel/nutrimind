@@ -40,8 +40,8 @@ type jwtClaims struct {
 // GenerateAppToken generates a short-lived JWT (30 days by default per SRS §6.7)
 func (s *jwtServiceImpl) GenerateAppToken(userID uint, googleID, role string) (string, error) {
 	// FOR TESTING: Set app token expiry to 30 seconds
-	// expiry := time.Now().Add(time.Duration(s.appExpiryDays) * 24 * time.Hour)
-	expiry := time.Now().Add(30 * time.Second)
+	expiry := time.Now().Add(time.Duration(s.appExpiryDays) * 24 * time.Hour)
+	// expiry := time.Now().Add(30 * time.Second)
 
 	claims := jwtClaims{
 		UserID:    userID,
@@ -119,6 +119,21 @@ func (s *jwtServiceImpl) ValidateToken(tokenString string) (*valueobject.JWTClai
 	}, nil
 }
 
+// GetRefreshTokenExpiry parses a refresh token and returns its expiry time.
+func (s *jwtServiceImpl) GetRefreshTokenExpiry(tokenString string) (time.Time, error) {
+	claims, err := s.parseToken(tokenString)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if claims.TokenType != "refresh" {
+		return time.Time{}, apperror.ErrUnauthorized.WithMessage("Token không hợp lệ")
+	}
+	if claims.ExpiresAt == nil {
+		return time.Time{}, apperror.ErrUnauthorized.WithMessage("Token thiếu thông tin hết hạn")
+	}
+	return claims.ExpiresAt.Time, nil
+}
+
 // ValidateRefreshToken validates a refresh JWT and returns its claims.
 func (s *jwtServiceImpl) ValidateRefreshToken(tokenString string) (*valueobject.JWTClaims, error) {
 	claims, err := s.parseToken(tokenString)
@@ -138,8 +153,8 @@ func (s *jwtServiceImpl) ValidateRefreshToken(tokenString string) (*valueobject.
 
 func (s *jwtServiceImpl) GetAppExpirySeconds() int {
 	// FOR TESTING: return 30 seconds
-	// return s.appExpiryDays * 24 * 3600
-	return 30
+	return s.appExpiryDays * 24 * 3600
+	// return 30
 }
 
 func (s *jwtServiceImpl) GetRefreshExpirySeconds() int {

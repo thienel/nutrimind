@@ -60,6 +60,9 @@ func (r *routeRegister) registerAuthRoutes(rg *gin.RouterGroup) {
 
 		// Protected: get current user
 		auth.GET("/me", r.mw.Auth(), r.auth.GetMe)
+
+		// Protected: sign out — revokes refresh token on server; client deletes app token from secure storage
+		auth.POST("/signout", r.mw.Auth(), r.auth.SignOut)
 	}
 }
 
