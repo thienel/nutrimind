@@ -12,6 +12,7 @@ type routeRegister struct {
 	auth          handler.AuthHandler
 	user          handler.UserHandler
 	healthProfile handler.HealthProfileHandler
+	weightEntry   handler.WeightEntryHandler
 	mw            *middleware.Middleware
 }
 
@@ -20,6 +21,7 @@ func SetupRouter(
 	authHandler handler.AuthHandler,
 	userHandler handler.UserHandler,
 	healthProfileHandler handler.HealthProfileHandler,
+	weightEntryHandler handler.WeightEntryHandler,
 	mw *middleware.Middleware,
 ) *gin.Engine {
 
@@ -27,6 +29,7 @@ func SetupRouter(
 		auth:          authHandler,
 		user:          userHandler,
 		healthProfile: healthProfileHandler,
+		weightEntry:   weightEntryHandler,
 		mw:            mw,
 	}
 
@@ -48,6 +51,7 @@ func SetupRouter(
 	{
 		routes.registerUserRoutes(protected)
 		routes.registerHealthProfileRoutes(protected)
+		routes.registerWeightEntryRoutes(protected)
 	}
 
 	return router
@@ -87,5 +91,19 @@ func (r *routeRegister) registerHealthProfileRoutes(rg *gin.RouterGroup) {
 		hp.POST("", r.healthProfile.CreateProfile)
 		// Get the current user's profile
 		hp.GET("/me", r.healthProfile.GetMyProfile)
+	}
+}
+
+func (r *routeRegister) registerWeightEntryRoutes(rg *gin.RouterGroup) {
+	we := rg.Group("/weight-entries")
+	{
+		// POST   /api/weight-entries          — log / upsert for a given date
+		we.POST("", r.weightEntry.LogWeight)
+		// GET    /api/weight-entries          — paginated history (newest first)
+		we.GET("", r.weightEntry.GetHistory)
+		// GET    /api/weight-entries/date?date=YYYY-MM-DD
+		we.GET("/date", r.weightEntry.GetByDate)
+		// DELETE /api/weight-entries/:id
+		we.DELETE("/:id", r.weightEntry.Delete)
 	}
 }
