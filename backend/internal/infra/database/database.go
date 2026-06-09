@@ -55,7 +55,7 @@ func Init(cfg *config.DatabaseConfig) error {
 		sqlDB.SetMaxOpenConns(100)
 
 		// AutoMigrate all models
-		if err := gormDB.AutoMigrate(&entity.User{}); err != nil {
+		if err := gormDB.AutoMigrate(&entity.User{}, &entity.HealthProfile{}); err != nil {
 			initErr = fmt.Errorf("failed to run auto migrate: %w", err)
 			return
 		}
