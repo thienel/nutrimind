@@ -9,22 +9,25 @@ import (
 )
 
 type routeRegister struct {
-	auth handler.AuthHandler
-	user handler.UserHandler
-	mw   *middleware.Middleware
+	auth          handler.AuthHandler
+	user          handler.UserHandler
+	healthProfile handler.HealthProfileHandler
+	mw            *middleware.Middleware
 }
 
 // SetupRouter configures all routes
 func SetupRouter(
 	authHandler handler.AuthHandler,
 	userHandler handler.UserHandler,
+	healthProfileHandler handler.HealthProfileHandler,
 	mw *middleware.Middleware,
 ) *gin.Engine {
 
 	routes := routeRegister{
-		auth: authHandler,
-		user: userHandler,
-		mw:   mw,
+		auth:          authHandler,
+		user:          userHandler,
+		healthProfile: healthProfileHandler,
+		mw:            mw,
 	}
 
 	router := gin.New()
@@ -44,6 +47,7 @@ func SetupRouter(
 	protected := api.Group("", mw.Auth())
 	{
 		routes.registerUserRoutes(protected)
+		routes.registerHealthProfileRoutes(protected)
 	}
 
 	return router
@@ -73,5 +77,15 @@ func (r *routeRegister) registerUserRoutes(rg *gin.RouterGroup) {
 		users.GET("/:id", r.user.GetByID)
 		users.PUT("/:id", r.user.Update)
 		users.DELETE("/:id", r.user.Delete)
+	}
+}
+
+func (r *routeRegister) registerHealthProfileRoutes(rg *gin.RouterGroup) {
+	hp := rg.Group("/health-profile")
+	{
+		// Create profile for the first time
+		hp.POST("", r.healthProfile.CreateProfile)
+		// Get the current user's profile
+		hp.GET("/me", r.healthProfile.GetMyProfile)
 	}
 }
