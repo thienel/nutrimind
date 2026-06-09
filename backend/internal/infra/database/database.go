@@ -55,8 +55,20 @@ func Init(cfg *config.DatabaseConfig) error {
 		sqlDB.SetMaxOpenConns(100)
 
 		// AutoMigrate all models
-		if err := gormDB.AutoMigrate(&entity.User{}, &entity.HealthProfile{}); err != nil {
+		if err := gormDB.AutoMigrate(
+			&entity.User{},
+			&entity.HealthProfile{},
+			&entity.WeightEntry{},
+		); err != nil {
 			initErr = fmt.Errorf("failed to run auto migrate: %w", err)
+			return
+		}
+
+		// Composite unique index: one weight entry per user per day
+		if err := gormDB.Exec(
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_weight_entries_user_date ON weight_entries(user_id, date)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create unique index on weight_entries: %w", err)
 			return
 		}
 
