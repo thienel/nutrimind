@@ -1,1 +1,0 @@
-// TODO: Circular progress ring

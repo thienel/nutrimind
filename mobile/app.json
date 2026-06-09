@@ -1,44 +1,44 @@
 {
   "expo": {
-    "name": "NutriMind",
-    "slug": "nutrimind",
+    "name": "Nutrimind",
+    "slug": "Nutrimind",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/images/icon.png",
     "scheme": "nutrimind",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.nutrimind",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "icon": "./assets/expo.icon"
     },
     "android": {
-      "package": "com.nutrimind",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-router",
       [
-        "@react-native-google-signin/google-signin",
+        "expo-splash-screen",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.451492936968-p94s2eumqap59i0q8uof4n2r88ffsgqs"
+          "backgroundColor": "#208AEF",
+          "android": {
+            "image": "./assets/images/splash-icon.png",
+            "imageWidth": 76
+          }
         }
       ]
     ],
-    "extra": {
-      "eas": {
-        "projectId": "f771082c-f4bc-4681-a2a1-f68ba08be6c2"
-      }
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
     }
   }
 }
