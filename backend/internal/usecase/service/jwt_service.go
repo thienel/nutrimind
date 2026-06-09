@@ -1,6 +1,10 @@
 package service
 
-import "nutrimind-backend/internal/domain/valueobject"
+import (
+	"time"
+
+	"nutrimind-backend/internal/domain/valueobject"
+)
 
 // JWTService defines JWT operations
 type JWTService interface {
@@ -12,6 +16,9 @@ type JWTService interface {
 	ValidateToken(tokenString string) (*valueobject.JWTClaims, error)
 	// ValidateRefreshToken validates a refresh JWT and returns claims
 	ValidateRefreshToken(tokenString string) (*valueobject.JWTClaims, error)
+	// GetRefreshTokenExpiry parses a refresh token and returns its expiry time.
+	// Returns an error if the token is invalid or already expired.
+	GetRefreshTokenExpiry(tokenString string) (time.Time, error)
 	// GetAppExpirySeconds returns the app token expiry in seconds
 	GetAppExpirySeconds() int
 	// GetRefreshExpirySeconds returns the refresh token expiry in seconds
