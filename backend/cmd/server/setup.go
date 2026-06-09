@@ -23,6 +23,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	// Repositories
 	db := database.GetDB()
 	userRepo := persistence.NewUserRepository(db)
+	healthProfileRepo := persistence.NewHealthProfileRepository(db)
 
 	// Shared infrastructure
 	// Clean up expired blacklist entries every hour.
@@ -36,6 +37,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	)
 	authService := serviceimpl.NewAuthService(userRepo, jwtService, tokenBlacklist, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
 	userService := serviceimpl.NewUserService(userRepo)
+	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo)
 
 	// Middleware
 	origins := strings.Join(cfg.CORSAllowedOrigins, ",")
@@ -44,9 +46,10 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService, userService)
 	userHandler := handler.NewUserHandler(userService)
+	healthProfileHandler := handler.NewHealthProfileHandler(healthProfileService)
 
 	// Build router
-	return router.SetupRouter(authHandler, userHandler, mw)
+	return router.SetupRouter(authHandler, userHandler, healthProfileHandler, mw)
 }
 
 func init() {
