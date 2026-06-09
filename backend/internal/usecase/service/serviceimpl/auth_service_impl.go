@@ -14,11 +14,13 @@ import (
 	"nutrimind-backend/internal/interface/api/dto"
 	"nutrimind-backend/internal/usecase/service"
 	apperror "nutrimind-backend/pkg/error"
+	"nutrimind-backend/pkg/tokenstore"
 )
 
 type authServiceImpl struct {
 	userRepo        repository.UserRepository
 	jwtService      service.JWTService
+	tokenBlacklist  tokenstore.Store
 	googleClientIDs []string
 }
 
@@ -27,6 +29,7 @@ type authServiceImpl struct {
 func NewAuthService(
 	userRepo repository.UserRepository,
 	jwtService service.JWTService,
+	tokenBlacklist tokenstore.Store,
 	googleClientIDs ...string,
 ) service.AuthService {
 	ids := make([]string, 0, len(googleClientIDs))
@@ -38,6 +41,7 @@ func NewAuthService(
 	return &authServiceImpl{
 		userRepo:        userRepo,
 		jwtService:      jwtService,
+		tokenBlacklist:  tokenBlacklist,
 		googleClientIDs: ids,
 	}
 }
@@ -181,7 +185,12 @@ func (s *authServiceImpl) RefreshToken(ctx context.Context, refreshToken string)
 		return nil, apperror.ErrUnauthorized.WithMessage("Refresh token không hợp lệ hoặc đã hết hạn")
 	}
 
-	// 2. Verify the user still exists and is active in DB
+	// 2. Reject blacklisted (signed-out) refresh tokens
+	if s.tokenBlacklist.IsBlacklisted(refreshToken) {
+		return nil, apperror.ErrUnauthorized.WithMessage("Refresh token đã bị thu hồi, vui lòng đăng nhập lại")
+	}
+
+	// 3. Verify the user still exists and is active in DB
 	user, err := s.userRepo.FindByID(ctx, claims.UserID)
 	if err != nil {
 		return nil, apperror.ErrUnauthorized.WithMessage("Người dùng không tồn tại")
@@ -190,7 +199,7 @@ func (s *authServiceImpl) RefreshToken(ctx context.Context, refreshToken string)
 		return nil, apperror.ErrForbidden.WithMessage("Tài khoản đã bị vô hiệu hóa")
 	}
 
-	// 3. Generate a brand-new token pair (rotation — old refresh token is now superseded)
+	// 4. Generate a brand-new token pair (rotation — old refresh token is now superseded)
 	newAppToken, newRefreshToken, err := s.generateTokenPair(user)
 	if err != nil {
 		return nil, apperror.ErrInternalServerError.WithMessage("Không thể tạo token mới").WithError(err)
@@ -206,4 +215,24 @@ func (s *authServiceImpl) RefreshToken(ctx context.Context, refreshToken string)
 		RefreshToken:     newRefreshToken,
 		RefreshExpiresIn: s.jwtService.GetRefreshExpirySeconds(),
 	}, nil
+}
+
+// SignOut invalidates the given refresh token so it cannot be used for silent re-auth.
+// The client is responsible for clearing the app token from its own secure storage.
+func (s *authServiceImpl) SignOut(ctx context.Context, refreshToken string) error {
+	// Parse the token to get its expiry — we don't need the claims, just the expiry time.
+	expiresAt, err := s.jwtService.GetRefreshTokenExpiry(refreshToken)
+	if err != nil {
+		// If the token is already expired or invalid it poses no threat; treat as success.
+		tlog.Debug("SignOut: refresh token already invalid, nothing to revoke", zap.Error(err))
+		return nil
+	}
+
+	// Blacklist until the token's natural expiry so the store TTL stays tight.
+	s.tokenBlacklist.Add(refreshToken, expiresAt)
+
+	tlog.Info("User signed out — refresh token revoked",
+		zap.Time("token_expires_at", expiresAt),
+	)
+	return nil
 }

@@ -16,6 +16,7 @@ type AuthHandler interface {
 	GoogleSignIn(c *gin.Context)
 	RefreshToken(c *gin.Context)
 	GetMe(c *gin.Context)
+	SignOut(c *gin.Context)
 }
 
 type authHandlerImpl struct {
@@ -97,6 +98,31 @@ func (h *authHandlerImpl) GetMe(c *gin.Context) {
 		return
 	}
 	response.OK(c, toUserResponse(user), "")
+}
+
+// SignOut godoc
+// @Summary     Sign out
+// @Description Revokes the provided refresh token. The client must delete its own app token from secure storage.
+// @Tags        auth
+// @Security    BearerAuth
+// @Accept      json
+// @Produce     json
+// @Param       body body dto.SignOutRequest true "Refresh token to revoke"
+// @Success     200
+// @Router      /api/auth/signout [post]
+func (h *authHandlerImpl) SignOut(c *gin.Context) {
+	var req dto.SignOutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.WriteErrorResponse(c, apperror.ErrBadRequest.WithMessage("refresh_token là bắt buộc"))
+		return
+	}
+
+	if err := h.authService.SignOut(c.Request.Context(), req.RefreshToken); err != nil {
+		response.WriteErrorResponse(c, err)
+		return
+	}
+
+	response.OK[any](c, nil, "Đăng xuất thành công")
 }
 
 func toUserResponse(user *entity.User) dto.UserResponse {
