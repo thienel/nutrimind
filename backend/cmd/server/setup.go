@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/thienel/tlog"
@@ -14,6 +15,7 @@ import (
 	"nutrimind-backend/internal/interface/api/router"
 	"nutrimind-backend/internal/usecase/service/serviceimpl"
 	"nutrimind-backend/pkg/config"
+	"nutrimind-backend/pkg/tokenstore"
 )
 
 // setupDependencies wires up all layers and returns the configured router
@@ -22,13 +24,17 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	db := database.GetDB()
 	userRepo := persistence.NewUserRepository(db)
 
+	// Shared infrastructure
+	// Clean up expired blacklist entries every hour.
+	tokenBlacklist := tokenstore.New(time.Hour)
+
 	// Services
 	jwtService := serviceimpl.NewJWTService(
 		cfg.JWT.Secret,
 		cfg.JWT.AppExpiryDays,
 		cfg.JWT.RefreshExpiryDays,
 	)
-	authService := serviceimpl.NewAuthService(userRepo, jwtService, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
+	authService := serviceimpl.NewAuthService(userRepo, jwtService, tokenBlacklist, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
 	userService := serviceimpl.NewUserService(userRepo)
 
 	// Middleware
