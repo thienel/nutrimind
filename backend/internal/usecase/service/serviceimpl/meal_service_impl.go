@@ -18,6 +18,7 @@ type mealServiceImpl struct {
 	mealRepo   repository.MealEntryRepository
 	dupChecker service.MealDupChecker
 	aiAnalyzer service.FoodPhotoAnalyzer
+	userRepo   repository.UserRepository
 }
 
 // NewMealService creates a new MealService.
@@ -25,11 +26,13 @@ func NewMealService(
 	mealRepo repository.MealEntryRepository,
 	dupChecker service.MealDupChecker,
 	aiAnalyzer service.FoodPhotoAnalyzer,
+	userRepo repository.UserRepository,
 ) service.MealService {
 	return &mealServiceImpl{
 		mealRepo:   mealRepo,
 		dupChecker: dupChecker,
 		aiAnalyzer: aiAnalyzer,
+		userRepo:   userRepo,
 	}
 }
 
@@ -63,6 +66,8 @@ func (s *mealServiceImpl) LogMeal(ctx context.Context, cmd service.LogMealComman
 	if err := s.mealRepo.Create(ctx, entry); err != nil {
 		return nil, err
 	}
+
+	_ = s.userRepo.UpdateLastActivityAt(ctx, cmd.UserID, time.Now())
 
 	return toMealEntryResult(entry), nil
 }
