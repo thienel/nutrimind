@@ -60,6 +60,7 @@ func Init(cfg *config.DatabaseConfig) error {
 			&entity.HealthProfile{},
 			&entity.WeightEntry{},
 			&entity.MealEntry{},
+			&entity.WaterEntry{},
 		); err != nil {
 			initErr = fmt.Errorf("failed to run auto migrate: %w", err)
 			return
@@ -78,6 +79,14 @@ func Init(cfg *config.DatabaseConfig) error {
 			`CREATE INDEX IF NOT EXISTS idx_meal_entries_user_logged_date ON meal_entries(user_id, logged_date DESC)`,
 		).Error; err != nil {
 			initErr = fmt.Errorf("failed to create index on meal_entries: %w", err)
+			return
+		}
+
+		// Non-unique index: fast lookups of water entries by user + date
+		if err := gormDB.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_water_entries_user_logged_date ON water_entries(user_id, logged_date DESC)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on water_entries: %w", err)
 			return
 		}
 
