@@ -13,16 +13,19 @@ import (
 type waterServiceImpl struct {
 	waterRepo   repository.WaterEntryRepository
 	profileRepo repository.HealthProfileRepository
+	userRepo    repository.UserRepository
 }
 
 // NewWaterService creates a new WaterService.
 func NewWaterService(
 	waterRepo repository.WaterEntryRepository,
 	profileRepo repository.HealthProfileRepository,
+	userRepo repository.UserRepository,
 ) service.WaterService {
 	return &waterServiceImpl{
 		waterRepo:   waterRepo,
 		profileRepo: profileRepo,
+		userRepo:    userRepo,
 	}
 }
 
@@ -49,6 +52,8 @@ func (s *waterServiceImpl) LogWater(ctx context.Context, cmd service.LogWaterCom
 	if err := s.waterRepo.Create(ctx, entry); err != nil {
 		return nil, err
 	}
+
+	_ = s.userRepo.UpdateLastActivityAt(ctx, cmd.UserID, time.Now())
 
 	dailyTotal, err := s.waterRepo.SumByUserIDAndDate(ctx, cmd.UserID, loggedDate)
 	if err != nil {
