@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"nutrimind-backend/internal/domain/entity"
 	"nutrimind-backend/pkg/query"
@@ -16,4 +17,13 @@ type UserRepository interface {
 
 	// ListWithQuery supports search filter across multiple fields
 	ListWithQuery(ctx context.Context, offset, limit int, opts query.QueryOptions) ([]*entity.User, int64, error)
+
+	// FindByIDs returns multiple users by their IDs.
+	FindByIDs(ctx context.Context, ids []uint) ([]entity.User, error)
+
+	// SearchSocial searches users by display_name or email, excluding the given userID.
+	SearchSocial(ctx context.Context, q string, excludeUserID uint) ([]entity.User, error)
+
+	// UpdateLastActivityAt updates the last_activity_at timestamp for a user.
+	UpdateLastActivityAt(ctx context.Context, userID uint, at time.Time) error
 }
