@@ -61,6 +61,9 @@ func Init(cfg *config.DatabaseConfig) error {
 			&entity.WeightEntry{},
 			&entity.MealEntry{},
 			&entity.WaterEntry{},
+			&entity.UserDevice{},
+			&entity.ReminderConfig{},
+			&entity.NotificationLog{},
 		); err != nil {
 			initErr = fmt.Errorf("failed to run auto migrate: %w", err)
 			return
@@ -87,6 +90,30 @@ func Init(cfg *config.DatabaseConfig) error {
 			`CREATE INDEX IF NOT EXISTS idx_water_entries_user_logged_date ON water_entries(user_id, logged_date DESC)`,
 		).Error; err != nil {
 			initErr = fmt.Errorf("failed to create index on water_entries: %w", err)
+			return
+		}
+
+		// Unique index: one FCM token per user per platform
+		if err := gormDB.Exec(
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_user_devices_user_platform ON user_devices(user_id, platform)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on user_devices: %w", err)
+			return
+		}
+
+		// Unique index: one reminder config per user per type
+		if err := gormDB.Exec(
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_reminder_configs_user_type ON reminder_configs(user_id, reminder_type)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on reminder_configs: %w", err)
+			return
+		}
+
+		// Index: fast lookups of notification logs by user
+		if err := gormDB.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_notification_logs_user ON notification_logs(user_id, created_at DESC)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on notification_logs: %w", err)
 			return
 		}
 
