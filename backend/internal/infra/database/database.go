@@ -54,7 +54,7 @@ func Init(cfg *config.DatabaseConfig) error {
 		sqlDB.SetMaxIdleConns(10)
 		sqlDB.SetMaxOpenConns(100)
 
-		// AutoMigrate all models
+		// AutoMigrate all models — new columns are added automatically
 		if err := gormDB.AutoMigrate(
 			&entity.User{},
 			&entity.HealthProfile{},
