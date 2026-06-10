@@ -145,4 +145,35 @@ var (
 		Message:    "AI Coach tạm thời không khả dụng, vui lòng thử lại sau",
 		HTTPStatus: http.StatusServiceUnavailable,
 	}
+
+	// Social feature errors
+	ErrSocialDisabled = &AppError{
+		Code:       "SOCIAL_DISABLED",
+		Message:    "Social features are disabled. Enable them in settings.",
+		HTTPStatus: http.StatusForbidden,
+	}
+
+	ErrAlreadyFriends = &AppError{
+		Code:       "ALREADY_FRIENDS",
+		Message:    "Đã là bạn bè",
+		HTTPStatus: http.StatusConflict,
+	}
+
+	ErrRequestPending = &AppError{
+		Code:       "REQUEST_PENDING",
+		Message:    "Lời mời kết bạn đã tồn tại",
+		HTTPStatus: http.StatusConflict,
+	}
+
+	ErrCheerRateLimit = &AppError{
+		Code:       "CHEER_RATE_LIMIT",
+		Message:    "Đã gửi 5 cheers cho bạn bè này hôm nay",
+		HTTPStatus: http.StatusConflict,
+	}
+
+	ErrChallengeAlreadyEnrolled = &AppError{
+		Code:       "CHALLENGE_ALREADY_ENROLLED",
+		Message:    "Đã tham gia challenge này",
+		HTTPStatus: http.StatusConflict,
+	}
 )

@@ -84,5 +84,55 @@ func (r *mealEntryRepositoryImpl) FindByUserIDAndDate(ctx context.Context, userI
 	return entries, nil
 }
 
+func (r *mealEntryRepositoryImpl) SumMacrosByUserIDAndDate(ctx context.Context, userID uint, date time.Time) (repository.MealDailyMacros, error) {
+	type row struct {
+		TotalCalories float64
+		TotalProteinG float64
+		TotalCarbG    float64
+		TotalFatG     float64
+	}
+	var result row
+	err := r.db.WithContext(ctx).
+		Model(&entity.MealEntry{}).
+		Select("COALESCE(SUM(calories), 0) AS total_calories, COALESCE(SUM(protein_g), 0) AS total_protein_g, COALESCE(SUM(carb_g), 0) AS total_carb_g, COALESCE(SUM(fat_g), 0) AS total_fat_g").
+		Where("user_id = ? AND logged_date = ?", userID, date.Truncate(24*time.Hour)).
+		Scan(&result).Error
+	if err != nil {
+		return repository.MealDailyMacros{}, wrapListError(err, "meal entry")
+	}
+	return repository.MealDailyMacros{
+		TotalCalories: result.TotalCalories,
+		TotalProteinG: result.TotalProteinG,
+		TotalCarbG:    result.TotalCarbG,
+		TotalFatG:     result.TotalFatG,
+	}, nil
+}
+
+func (r *mealEntryRepositoryImpl) ListDailySummaryByDateRange(ctx context.Context, userID uint, from, to time.Time) ([]repository.MealDailySummary, error) {
+	type row struct {
+		LoggedDate    time.Time
+		TotalCalories float64
+	}
+	var rows []row
+	err := r.db.WithContext(ctx).
+		Model(&entity.MealEntry{}).
+		Select("logged_date, COALESCE(SUM(calories), 0) AS total_calories").
+		Where("user_id = ? AND logged_date BETWEEN ? AND ?", userID, from.Truncate(24*time.Hour), to.Truncate(24*time.Hour)).
+		Group("logged_date").
+		Order("logged_date ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, wrapListError(err, "meal entry")
+	}
+	summaries := make([]repository.MealDailySummary, 0, len(rows))
+	for _, r := range rows {
+		summaries = append(summaries, repository.MealDailySummary{
+			LoggedDate:    r.LoggedDate,
+			TotalCalories: r.TotalCalories,
+		})
+	}
+	return summaries, nil
+}
+
 // ensure compile-time interface satisfaction
 var _ repository.MealEntryRepository = (*mealEntryRepositoryImpl)(nil)

@@ -87,3 +87,16 @@ func (r *healthProfileRepositoryImpl) FindByUserID(ctx context.Context, userID u
 	}
 	return &hp, nil
 }
+
+func (r *healthProfileRepositoryImpl) FindByUserIDs(ctx context.Context, userIDs []uint) ([]entity.HealthProfile, error) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+	var profiles []entity.HealthProfile
+	if err := r.db.WithContext(ctx).Where("user_id IN ?", userIDs).Find(&profiles).Error; err != nil {
+		return nil, wrapListError(err, "health profile")
+	}
+	return profiles, nil
+}
+
+var _ repository.HealthProfileRepository = (*healthProfileRepositoryImpl)(nil)
