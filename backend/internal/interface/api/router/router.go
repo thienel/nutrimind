@@ -16,7 +16,7 @@ type routeRegister struct {
 	mw            *middleware.Middleware
 }
 
-// SetupRouter configures all routes
+// SetupRouter configures all routes under /api/v1.
 func SetupRouter(
 	authHandler handler.AuthHandler,
 	userHandler handler.UserHandler,
@@ -36,12 +36,12 @@ func SetupRouter(
 	router := gin.New()
 	router.Use(gin.Recovery(), mw.CORS(), tlog.GinMiddleware(tlog.WithSkipPaths("/health")))
 
-	// Health check
+	// Health check (no versioning)
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	api := router.Group("/api")
+	api := router.Group("/api/v1")
 	{
 		routes.registerAuthRoutes(api)
 	}
@@ -50,7 +50,7 @@ func SetupRouter(
 	protected := api.Group("", mw.Auth())
 	{
 		routes.registerUserRoutes(protected)
-		routes.registerHealthProfileRoutes(protected)
+		routes.registerProfileRoutes(protected)
 		routes.registerWeightEntryRoutes(protected)
 	}
 
@@ -60,16 +60,9 @@ func SetupRouter(
 func (r *routeRegister) registerAuthRoutes(rg *gin.RouterGroup) {
 	auth := rg.Group("/auth")
 	{
-		// Public: exchange Google ID token for app token + refresh token
 		auth.POST("/google", r.auth.GoogleSignIn)
-
-		// Public: exchange a valid refresh token for a new token pair (silent re-auth)
 		auth.POST("/refresh", r.auth.RefreshToken)
-
-		// Protected: get current user
 		auth.GET("/me", r.mw.Auth(), r.auth.GetMe)
-
-		// Protected: sign out — revokes refresh token on server; client deletes app token from secure storage
 		auth.POST("/signout", r.mw.Auth(), r.auth.SignOut)
 	}
 }
@@ -84,26 +77,26 @@ func (r *routeRegister) registerUserRoutes(rg *gin.RouterGroup) {
 	}
 }
 
-func (r *routeRegister) registerHealthProfileRoutes(rg *gin.RouterGroup) {
-	hp := rg.Group("/health-profile")
+func (r *routeRegister) registerProfileRoutes(rg *gin.RouterGroup) {
+	profile := rg.Group("/profile")
 	{
-		// Create profile for the first time
-		hp.POST("", r.healthProfile.CreateProfile)
-		// Get the current user's profile
-		hp.GET("/me", r.healthProfile.GetMyProfile)
+		// POST /api/v1/profile/onboarding — create/complete onboarding
+		profile.POST("/onboarding", r.healthProfile.Onboarding)
+		// GET  /api/v1/profile — get full profile
+		profile.GET("", r.healthProfile.GetProfile)
+		// PATCH /api/v1/profile — partial update
+		profile.PATCH("", r.healthProfile.UpdateProfile)
+		// PATCH /api/v1/profile/social — toggle social feature
+		profile.PATCH("/social", r.healthProfile.ToggleSocial)
 	}
 }
 
 func (r *routeRegister) registerWeightEntryRoutes(rg *gin.RouterGroup) {
 	we := rg.Group("/weight-entries")
 	{
-		// POST   /api/weight-entries          — log / upsert for a given date
 		we.POST("", r.weightEntry.LogWeight)
-		// GET    /api/weight-entries          — paginated history (newest first)
 		we.GET("", r.weightEntry.GetHistory)
-		// GET    /api/weight-entries/date?date=YYYY-MM-DD
 		we.GET("/date", r.weightEntry.GetByDate)
-		// DELETE /api/weight-entries/:id
 		we.DELETE("/:id", r.weightEntry.Delete)
 	}
 }
