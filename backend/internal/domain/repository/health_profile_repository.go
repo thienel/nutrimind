@@ -13,4 +13,7 @@ type HealthProfileRepository interface {
 
 	// FindByUserID returns the health profile belonging to the given user.
 	FindByUserID(ctx context.Context, userID uint) (*entity.HealthProfile, error)
+
+	// FindByUserIDs returns health profiles for multiple users.
+	FindByUserIDs(ctx context.Context, userIDs []uint) ([]entity.HealthProfile, error)
 }
