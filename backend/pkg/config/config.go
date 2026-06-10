@@ -67,12 +67,19 @@ type GoogleConfig struct {
 	ClientIDIOS string `env:"GOOGLE_CLIENT_ID_IOS"`
 }
 
+// OpenAIConfig holds OpenAI API configuration
+type OpenAIConfig struct {
+	APIKey string `env:"OPENAI_API_KEY"`
+	Model  string `env:"OPENAI_VISION_MODEL" env-default:"gpt-4o"`
+}
+
 // Config holds all application configuration
 type Config struct {
 	Server    ServerConfig
 	Database  DatabaseConfig
 	JWT       JWTConfig
 	Google    GoogleConfig
+	OpenAI    OpenAIConfig
 	Log       LogConfig
 	Cookie    CookieConfig
 	RateLimit RateLimitConfig
