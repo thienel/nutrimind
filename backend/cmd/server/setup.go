@@ -30,6 +30,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	healthProfileRepo := persistence.NewHealthProfileRepository(db)
 	weightEntryRepo := persistence.NewWeightEntryRepository(db)
 	mealEntryRepo := persistence.NewMealEntryRepository(db)
+	waterEntryRepo := persistence.NewWaterEntryRepository(db)
 
 	// Shared infrastructure
 	// Clean up expired blacklist entries every hour.
@@ -57,6 +58,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo, weightEntryRepo)
 	healthMetricService := serviceimpl.NewHealthMetricService(healthProfileRepo, weightEntryRepo)
 	mealService := serviceimpl.NewMealService(mealEntryRepo, dupChecker, aiAnalyzer)
+	waterService := serviceimpl.NewWaterService(waterEntryRepo, healthProfileRepo)
 
 	// Middleware
 	origins := strings.Join(cfg.CORSAllowedOrigins, ",")
@@ -68,9 +70,10 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	healthProfileHandler := handler.NewHealthProfileHandler(healthProfileService)
 	healthMetricHandler := handler.NewHealthMetricHandler(healthMetricService)
 	mealHandler := handler.NewMealHandler(mealService)
+	waterHandler := handler.NewWaterHandler(waterService)
 
 	// Build router
-	return router.SetupRouter(authHandler, userHandler, healthProfileHandler, healthMetricHandler, mealHandler, mw)
+	return router.SetupRouter(authHandler, userHandler, healthProfileHandler, healthMetricHandler, mealHandler, waterHandler, mw)
 }
 
 func init() {
