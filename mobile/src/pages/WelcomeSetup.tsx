@@ -1,7 +1,7 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Sparkles } from "lucide-react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export function WelcomeSetup() {
   return (
@@ -23,7 +23,7 @@ export function WelcomeSetup() {
 
       <Pressable
         style={styles.button}
-        onPress={() => router.push("/personal-information")}
+        onPress={() => router.push("/personal-setup")}
       >
         <Text style={styles.buttonText}>Get Started</Text>
       </Pressable>
