@@ -64,6 +64,11 @@ func Init(cfg *config.DatabaseConfig) error {
 			&entity.UserDevice{},
 			&entity.ReminderConfig{},
 			&entity.NotificationLog{},
+			&entity.Friendship{},
+			&entity.Challenge{},
+			&entity.ChallengeEnrollment{},
+			&entity.ChallengeDailyCompletion{},
+			&entity.CheerReaction{},
 		); err != nil {
 			initErr = fmt.Errorf("failed to run auto migrate: %w", err)
 			return
@@ -114,6 +119,38 @@ func Init(cfg *config.DatabaseConfig) error {
 			`CREATE INDEX IF NOT EXISTS idx_notification_logs_user ON notification_logs(user_id, created_at DESC)`,
 		).Error; err != nil {
 			initErr = fmt.Errorf("failed to create index on notification_logs: %w", err)
+			return
+		}
+
+		// Indexes for social features
+		if err := gormDB.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on friendships: %w", err)
+			return
+		}
+		if err := gormDB.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on friendships: %w", err)
+			return
+		}
+		if err := gormDB.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_challenge_enrollments_user ON challenge_enrollments(user_id, status)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on challenge_enrollments: %w", err)
+			return
+		}
+		if err := gormDB.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_challenge_daily_completions_enrollment ON challenge_daily_completions(enrollment_id, completion_date)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on challenge_daily_completions: %w", err)
+			return
+		}
+		if err := gormDB.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_cheer_reactions_sender_date ON cheer_reactions(sender_id, sent_date)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on cheer_reactions: %w", err)
 			return
 		}
 
