@@ -17,6 +17,7 @@ type routeRegister struct {
 	water         handler.WaterHandler
 	aiCoach       handler.AICoachHandler
 	notification  handler.NotificationHandler
+	social        handler.SocialHandler
 	mw            *middleware.Middleware
 }
 
@@ -30,6 +31,7 @@ func SetupRouter(
 	waterHandler handler.WaterHandler,
 	aiCoachHandler handler.AICoachHandler,
 	notificationHandler handler.NotificationHandler,
+	socialHandler handler.SocialHandler,
 	mw *middleware.Middleware,
 ) *gin.Engine {
 
@@ -42,6 +44,7 @@ func SetupRouter(
 		water:         waterHandler,
 		aiCoach:       aiCoachHandler,
 		notification:  notificationHandler,
+		social:        socialHandler,
 		mw:            mw,
 	}
 
@@ -68,6 +71,7 @@ func SetupRouter(
 		routes.registerWaterRoutes(protected)
 		routes.registerAIRoutes(protected)
 		routes.registerNotificationRoutes(protected)
+		routes.registerSocialRoutes(protected)
 	}
 
 	return router
@@ -152,5 +156,33 @@ func (r *routeRegister) registerNotificationRoutes(rg *gin.RouterGroup) {
 	{
 		reminders.GET("", r.notification.GetReminders)
 		reminders.PUT("/:type", r.notification.UpsertReminder)
+	}
+}
+
+func (r *routeRegister) registerSocialRoutes(rg *gin.RouterGroup) {
+	social := rg.Group("/social")
+	{
+		social.GET("/users/search", r.social.SearchUsers)
+		social.GET("/feed", r.social.GetFeed)
+		social.GET("/leaderboard", r.social.GetLeaderboard)
+
+		friends := social.Group("/friends")
+		{
+			friends.GET("", r.social.GetFriends)
+			friends.POST("/request", r.social.SendFriendRequest)
+			friends.PATCH("/request/:friendship_id", r.social.RespondFriendRequest)
+			friends.DELETE("/request/:friendship_id", r.social.CancelFriendRequest)
+			friends.DELETE("/:user_id", r.social.RemoveFriend)
+		}
+
+		social.POST("/cheer", r.social.SendCheer)
+
+		challenges := social.Group("/challenges")
+		{
+			challenges.GET("", r.social.GetChallengeCatalogue)
+			challenges.POST("/:challenge_id/join", r.social.JoinChallenge)
+			challenges.GET("/:challenge_id/progress", r.social.GetChallengeProgress)
+			challenges.DELETE("/:challenge_id/enrollment", r.social.AbandonChallenge)
+		}
 	}
 }
