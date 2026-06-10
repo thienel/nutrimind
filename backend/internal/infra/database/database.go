@@ -66,7 +66,7 @@ func Init(cfg *config.DatabaseConfig) error {
 
 		// Composite unique index: one weight entry per user per day
 		if err := gormDB.Exec(
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_weight_entries_user_date ON weight_entries(user_id, date)`,
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_weight_entries_user_logged_at ON weight_entries(user_id, logged_at)`,
 		).Error; err != nil {
 			initErr = fmt.Errorf("failed to create unique index on weight_entries: %w", err)
 			return
