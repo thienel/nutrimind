@@ -164,7 +164,7 @@ func (s *healthProfileServiceImpl) UpdateProfile(ctx context.Context, cmd servic
 		} else {
 			entry := &entity.WeightEntry{
 				UserID:   cmd.UserID,
-				Date:     today,
+				LoggedAt: today,
 				WeightKg: profile.WeightKg,
 			}
 			_ = s.weightRepo.Create(ctx, entry)

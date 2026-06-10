@@ -81,6 +81,12 @@ var (
 		HTTPStatus: http.StatusForbidden,
 	}
 
+	ErrOnboardingRequired = &AppError{
+		Code:       "ONBOARDING_REQUIRED",
+		Message:    "Vui lòng hoàn thành onboarding trước",
+		HTTPStatus: http.StatusForbidden,
+	}
+
 	// 404 Not Found
 	ErrNotFound = &AppError{
 		Code:       "NOT_FOUND",

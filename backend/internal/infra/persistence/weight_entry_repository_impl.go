@@ -82,17 +82,28 @@ func (r *weightEntryRepositoryImpl) Exists(ctx context.Context, id uint) (bool, 
 // FindByUserIDAndDate returns the weight entry for a specific user/date combination.
 func (r *weightEntryRepositoryImpl) FindByUserIDAndDate(ctx context.Context, userID uint, date time.Time) (*entity.WeightEntry, error) {
 	var we entity.WeightEntry
-	// Truncate to date only (YYYY-MM-DD) for the query
 	dateOnly := date.Truncate(24 * time.Hour)
 	if err := r.db.WithContext(ctx).
-		Where("user_id = ? AND date = ?", userID, dateOnly).
+		Where("user_id = ? AND logged_at = ?", userID, dateOnly).
 		First(&we).Error; err != nil {
 		return nil, wrapNotFoundError(err, "weight entry")
 	}
 	return &we, nil
 }
 
-// ListByUserID returns all weight entries for a user, ordered by date DESC.
+// FindLatestByUserID returns the most recent weight entry for a user.
+func (r *weightEntryRepositoryImpl) FindLatestByUserID(ctx context.Context, userID uint) (*entity.WeightEntry, error) {
+	var we entity.WeightEntry
+	if err := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("logged_at DESC").
+		First(&we).Error; err != nil {
+		return nil, wrapNotFoundError(err, "weight entry")
+	}
+	return &we, nil
+}
+
+// ListByUserID returns paginated weight entries for a user, ordered by logged_at DESC.
 func (r *weightEntryRepositoryImpl) ListByUserID(ctx context.Context, userID uint, offset, limit int) ([]entity.WeightEntry, int64, error) {
 	var entries []entity.WeightEntry
 	var total int64
@@ -102,10 +113,22 @@ func (r *weightEntryRepositoryImpl) ListByUserID(ctx context.Context, userID uin
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "weight entry")
 	}
-	if err := q.Order("date DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
+	if err := q.Order("logged_at DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
 		return nil, 0, wrapListError(err, "weight entry")
 	}
 	return entries, total, nil
+}
+
+// ListByUserIDInDateRange returns all weight entries within [from, to] for a user, newest first.
+func (r *weightEntryRepositoryImpl) ListByUserIDInDateRange(ctx context.Context, userID uint, from, to time.Time) ([]entity.WeightEntry, error) {
+	var entries []entity.WeightEntry
+	if err := r.db.WithContext(ctx).
+		Where("user_id = ? AND logged_at >= ? AND logged_at <= ?", userID, from, to).
+		Order("logged_at DESC").
+		Find(&entries).Error; err != nil {
+		return nil, wrapListError(err, "weight entry")
+	}
+	return entries, nil
 }
 
 // ensure compile-time interface satisfaction
