@@ -38,7 +38,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	)
 	authService := serviceimpl.NewAuthService(userRepo, jwtService, tokenBlacklist, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
 	userService := serviceimpl.NewUserService(userRepo)
-	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo)
+	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo, weightEntryRepo)
 	weightEntryService := serviceimpl.NewWeightEntryService(weightEntryRepo)
 
 	// Middleware
