@@ -16,6 +16,7 @@ type routeRegister struct {
 	meal          handler.MealHandler
 	water         handler.WaterHandler
 	aiCoach       handler.AICoachHandler
+	notification  handler.NotificationHandler
 	mw            *middleware.Middleware
 }
 
@@ -28,6 +29,7 @@ func SetupRouter(
 	mealHandler handler.MealHandler,
 	waterHandler handler.WaterHandler,
 	aiCoachHandler handler.AICoachHandler,
+	notificationHandler handler.NotificationHandler,
 	mw *middleware.Middleware,
 ) *gin.Engine {
 
@@ -39,6 +41,7 @@ func SetupRouter(
 		meal:          mealHandler,
 		water:         waterHandler,
 		aiCoach:       aiCoachHandler,
+		notification:  notificationHandler,
 		mw:            mw,
 	}
 
@@ -64,6 +67,7 @@ func SetupRouter(
 		routes.registerMealRoutes(protected)
 		routes.registerWaterRoutes(protected)
 		routes.registerAIRoutes(protected)
+		routes.registerNotificationRoutes(protected)
 	}
 
 	return router
@@ -137,5 +141,16 @@ func (r *routeRegister) registerAIRoutes(rg *gin.RouterGroup) {
 	{
 		ai.POST("/advice", r.aiCoach.GetAdvice)
 		ai.POST("/meal-suggestion", r.aiCoach.GetMealSuggestion)
+	}
+}
+
+func (r *routeRegister) registerNotificationRoutes(rg *gin.RouterGroup) {
+	rg.POST("/notifications/fcm-token", r.notification.RegisterFCMToken)
+	rg.GET("/notifications", r.notification.ListNotifications)
+
+	reminders := rg.Group("/reminders")
+	{
+		reminders.GET("", r.notification.GetReminders)
+		reminders.PUT("/:type", r.notification.UpsertReminder)
 	}
 }

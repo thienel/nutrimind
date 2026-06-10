@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -12,7 +13,9 @@ import (
 	"nutrimind-backend/internal/infra/aiclient"
 	"nutrimind-backend/internal/infra/cache"
 	"nutrimind-backend/internal/infra/database"
+	"nutrimind-backend/internal/infra/fcm"
 	"nutrimind-backend/internal/infra/persistence"
+	"nutrimind-backend/internal/infra/scheduler"
 	"nutrimind-backend/internal/interface/api/handler"
 	"nutrimind-backend/internal/interface/api/middleware"
 	"nutrimind-backend/internal/interface/api/router"
@@ -22,7 +25,7 @@ import (
 	"nutrimind-backend/pkg/tokenstore"
 )
 
-// setupDependencies wires up all layers and returns the configured router
+// setupDependencies wires up all layers and returns the configured router.
 func setupDependencies(cfg *config.Config) *gin.Engine {
 	// Repositories
 	db := database.GetDB()
@@ -31,12 +34,13 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	weightEntryRepo := persistence.NewWeightEntryRepository(db)
 	mealEntryRepo := persistence.NewMealEntryRepository(db)
 	waterEntryRepo := persistence.NewWaterEntryRepository(db)
+	deviceRepo := persistence.NewUserDeviceRepository(db)
+	reminderRepo := persistence.NewReminderConfigRepository(db)
+	notifRepo := persistence.NewNotificationLogRepository(db)
 
 	// Shared infrastructure
-	// Clean up expired blacklist entries every hour.
 	tokenBlacklist := tokenstore.New(time.Hour)
 
-	// Redis dedup checker — falls back to noop on parse error
 	var dupChecker service.MealDupChecker
 	if opts, err := redis.ParseURL(cfg.RedisURL); err == nil {
 		dupChecker = cache.NewRedisDupChecker(redis.NewClient(opts))
@@ -44,15 +48,24 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 		dupChecker = cache.NewNoopDupChecker()
 	}
 
-	// OpenAI vision client
 	aiAnalyzer := aiclient.NewOpenAIClient(cfg.OpenAI.APIKey, cfg.OpenAI.Model)
 
+	// FCM sender — falls back to noop when Firebase is not configured
+	var fcmSender fcm.Sender
+	if cfg.Firebase.ProjectID != "" {
+		ctx := context.Background()
+		if s, err := fcm.NewFirebaseSender(ctx, cfg.Firebase.ProjectID, cfg.Firebase.CredentialsJSON); err == nil {
+			fcmSender = s
+		} else {
+			tlog.Warn("Firebase init failed, FCM disabled", zap.Error(err))
+			fcmSender = fcm.NewNoopSender()
+		}
+	} else {
+		fcmSender = fcm.NewNoopSender()
+	}
+
 	// Services
-	jwtService := serviceimpl.NewJWTService(
-		cfg.JWT.Secret,
-		cfg.JWT.AppExpiryDays,
-		cfg.JWT.RefreshExpiryDays,
-	)
+	jwtService := serviceimpl.NewJWTService(cfg.JWT.Secret, cfg.JWT.AppExpiryDays, cfg.JWT.RefreshExpiryDays)
 	authService := serviceimpl.NewAuthService(userRepo, jwtService, tokenBlacklist, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
 	userService := serviceimpl.NewUserService(userRepo)
 	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo, weightEntryRepo)
@@ -60,10 +73,10 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	mealService := serviceimpl.NewMealService(mealEntryRepo, dupChecker, aiAnalyzer)
 	waterService := serviceimpl.NewWaterService(waterEntryRepo, healthProfileRepo)
 	aiCoachService := serviceimpl.NewAICoachService(healthProfileRepo, mealEntryRepo, waterEntryRepo, aiAnalyzer)
+	notifService := serviceimpl.NewNotificationService(deviceRepo, reminderRepo, notifRepo)
 
 	// Middleware
-	origins := strings.Join(cfg.CORSAllowedOrigins, ",")
-	mw := middleware.New(jwtService, origins)
+	mw := middleware.New(jwtService, strings.Join(cfg.CORSAllowedOrigins, ","))
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(authService, userService)
@@ -73,9 +86,16 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	mealHandler := handler.NewMealHandler(mealService)
 	waterHandler := handler.NewWaterHandler(waterService)
 	aiCoachHandler := handler.NewAICoachHandler(aiCoachService)
+	notifHandler := handler.NewNotificationHandler(notifService)
 
-	// Build router
-	return router.SetupRouter(authHandler, userHandler, healthProfileHandler, healthMetricHandler, mealHandler, waterHandler, aiCoachHandler, mw)
+	// Start background reminder scheduler
+	sched := scheduler.New(reminderRepo, deviceRepo, notifRepo, fcmSender)
+	go sched.Start(context.Background())
+
+	return router.SetupRouter(
+		authHandler, userHandler, healthProfileHandler, healthMetricHandler,
+		mealHandler, waterHandler, aiCoachHandler, notifHandler, mw,
+	)
 }
 
 func init() {
