@@ -39,7 +39,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	authService := serviceimpl.NewAuthService(userRepo, jwtService, tokenBlacklist, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
 	userService := serviceimpl.NewUserService(userRepo)
 	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo, weightEntryRepo)
-	weightEntryService := serviceimpl.NewWeightEntryService(weightEntryRepo)
+	healthMetricService := serviceimpl.NewHealthMetricService(healthProfileRepo, weightEntryRepo)
 
 	// Middleware
 	origins := strings.Join(cfg.CORSAllowedOrigins, ",")
@@ -49,10 +49,10 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	authHandler := handler.NewAuthHandler(authService, userService)
 	userHandler := handler.NewUserHandler(userService)
 	healthProfileHandler := handler.NewHealthProfileHandler(healthProfileService)
-	weightEntryHandler := handler.NewWeightEntryHandler(weightEntryService)
+	healthMetricHandler := handler.NewHealthMetricHandler(healthMetricService)
 
 	// Build router
-	return router.SetupRouter(authHandler, userHandler, healthProfileHandler, weightEntryHandler, mw)
+	return router.SetupRouter(authHandler, userHandler, healthProfileHandler, healthMetricHandler, mw)
 }
 
 func init() {
