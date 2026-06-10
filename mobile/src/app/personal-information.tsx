@@ -1,5 +1,5 @@
-import { PersonalSetup } from "@/pages/PersonalSetup";
+import { PersonalInformation } from "@/pages/PersonalInformation";
 
 export default function PersonalInformationScreen() {
-  return <PersonalSetup />;
+  return <PersonalInformation />;
 }
