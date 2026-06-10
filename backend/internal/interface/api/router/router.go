@@ -15,6 +15,7 @@ type routeRegister struct {
 	healthMetric  handler.HealthMetricHandler
 	meal          handler.MealHandler
 	water         handler.WaterHandler
+	aiCoach       handler.AICoachHandler
 	mw            *middleware.Middleware
 }
 
@@ -26,6 +27,7 @@ func SetupRouter(
 	healthMetricHandler handler.HealthMetricHandler,
 	mealHandler handler.MealHandler,
 	waterHandler handler.WaterHandler,
+	aiCoachHandler handler.AICoachHandler,
 	mw *middleware.Middleware,
 ) *gin.Engine {
 
@@ -36,6 +38,7 @@ func SetupRouter(
 		healthMetric:  healthMetricHandler,
 		meal:          mealHandler,
 		water:         waterHandler,
+		aiCoach:       aiCoachHandler,
 		mw:            mw,
 	}
 
@@ -60,6 +63,7 @@ func SetupRouter(
 		routes.registerHealthRoutes(protected)
 		routes.registerMealRoutes(protected)
 		routes.registerWaterRoutes(protected)
+		routes.registerAIRoutes(protected)
 	}
 
 	return router
@@ -125,5 +129,13 @@ func (r *routeRegister) registerWaterRoutes(rg *gin.RouterGroup) {
 		water.GET("", r.water.GetWaterByDate)
 		water.GET("/history", r.water.GetWaterHistory)
 		water.DELETE("/:id", r.water.DeleteWater)
+	}
+}
+
+func (r *routeRegister) registerAIRoutes(rg *gin.RouterGroup) {
+	ai := rg.Group("/ai")
+	{
+		ai.POST("/advice", r.aiCoach.GetAdvice)
+		ai.POST("/meal-suggestion", r.aiCoach.GetMealSuggestion)
 	}
 }
