@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -147,4 +148,35 @@ func (r *userRepositoryImpl) ListWithQuery(ctx context.Context, offset, limit in
 	}
 
 	return users, total, nil
+}
+
+func (r *userRepositoryImpl) FindByIDs(ctx context.Context, ids []uint) ([]entity.User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var users []entity.User
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return nil, wrapListError(err, "người dùng")
+	}
+	return users, nil
+}
+
+func (r *userRepositoryImpl) SearchSocial(ctx context.Context, q string, excludeUserID uint) ([]entity.User, error) {
+	var users []entity.User
+	pattern := "%" + q + "%"
+	if err := r.db.WithContext(ctx).
+		Where("id != ? AND (display_name ILIKE ? OR email ILIKE ?)", excludeUserID, pattern, pattern).
+		Limit(20).
+		Find(&users).Error; err != nil {
+		return nil, wrapListError(err, "người dùng")
+	}
+	return users, nil
+}
+
+func (r *userRepositoryImpl) UpdateLastActivityAt(ctx context.Context, userID uint, at time.Time) error {
+	if err := r.db.WithContext(ctx).Model(&entity.User{}).Where("id = ?", userID).
+		Update("last_activity_at", at).Error; err != nil {
+		return wrapUpdateError(err, "người dùng")
+	}
+	return nil
 }

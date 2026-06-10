@@ -10,6 +10,7 @@ import (
 	"github.com/thienel/tlog"
 	"go.uber.org/zap"
 
+	"nutrimind-backend/internal/domain/entity"
 	"nutrimind-backend/internal/infra/aiclient"
 	"nutrimind-backend/internal/infra/cache"
 	"nutrimind-backend/internal/infra/database"
@@ -37,6 +38,14 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	deviceRepo := persistence.NewUserDeviceRepository(db)
 	reminderRepo := persistence.NewReminderConfigRepository(db)
 	notifRepo := persistence.NewNotificationLogRepository(db)
+	friendshipRepo := persistence.NewFriendshipRepository(db)
+	challengeRepo := persistence.NewChallengeRepository(db)
+	enrollmentRepo := persistence.NewChallengeEnrollmentRepository(db)
+	completionRepo := persistence.NewChallengeDailyCompletionRepository(db)
+	cheerRepo := persistence.NewCheerReactionRepository(db)
+
+	// Seed challenge catalogue.
+	seedChallenges(challengeRepo)
 
 	// Shared infrastructure
 	tokenBlacklist := tokenstore.New(time.Hour)
@@ -70,10 +79,15 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	userService := serviceimpl.NewUserService(userRepo)
 	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo, weightEntryRepo)
 	healthMetricService := serviceimpl.NewHealthMetricService(healthProfileRepo, weightEntryRepo)
-	mealService := serviceimpl.NewMealService(mealEntryRepo, dupChecker, aiAnalyzer)
-	waterService := serviceimpl.NewWaterService(waterEntryRepo, healthProfileRepo)
+	mealService := serviceimpl.NewMealService(mealEntryRepo, dupChecker, aiAnalyzer, userRepo)
+	waterService := serviceimpl.NewWaterService(waterEntryRepo, healthProfileRepo, userRepo)
 	aiCoachService := serviceimpl.NewAICoachService(healthProfileRepo, mealEntryRepo, waterEntryRepo, aiAnalyzer)
 	notifService := serviceimpl.NewNotificationService(deviceRepo, reminderRepo, notifRepo)
+	socialService := serviceimpl.NewSocialService(
+		healthProfileRepo, userRepo, mealEntryRepo, waterEntryRepo, weightEntryRepo,
+		friendshipRepo, challengeRepo, enrollmentRepo, completionRepo, cheerRepo,
+		deviceRepo, notifRepo, fcmSender,
+	)
 
 	// Middleware
 	mw := middleware.New(jwtService, strings.Join(cfg.CORSAllowedOrigins, ","))
@@ -87,15 +101,45 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	waterHandler := handler.NewWaterHandler(waterService)
 	aiCoachHandler := handler.NewAICoachHandler(aiCoachService)
 	notifHandler := handler.NewNotificationHandler(notifService)
+	socialHandler := handler.NewSocialHandler(socialService)
 
-	// Start background reminder scheduler
+	// Start background schedulers
 	sched := scheduler.New(reminderRepo, deviceRepo, notifRepo, fcmSender)
 	go sched.Start(context.Background())
 
+	challengeSched := scheduler.NewChallengeScheduler(
+		enrollmentRepo, completionRepo, challengeRepo, mealEntryRepo, waterEntryRepo, healthProfileRepo,
+	)
+	go challengeSched.Start(context.Background())
+
 	return router.SetupRouter(
 		authHandler, userHandler, healthProfileHandler, healthMetricHandler,
-		mealHandler, waterHandler, aiCoachHandler, notifHandler, mw,
+		mealHandler, waterHandler, aiCoachHandler, notifHandler, socialHandler, mw,
 	)
+}
+
+// seedChallenges inserts the two default challenges if they don't already exist.
+func seedChallenges(repo interface {
+	FirstOrCreate(ctx context.Context, c *entity.Challenge) error
+}) {
+	ctx := context.Background()
+	challenges := []entity.Challenge{
+		{
+			Name:         "7-Day Hydration Challenge",
+			Type:         entity.ChallengeTypeHydration,
+			DurationDays: 7,
+			Description:  "Đạt mục tiêu uống nước hằng ngày trong 7 ngày liên tiếp",
+		},
+		{
+			Name:         "7-Day Calorie Goal Challenge",
+			Type:         entity.ChallengeTypeCalorieGoal,
+			DurationDays: 7,
+			Description:  "Duy trì lượng calories trong mục tiêu 7 ngày liên tiếp",
+		},
+	}
+	for i := range challenges {
+		_ = repo.FirstOrCreate(ctx, &challenges[i])
+	}
 }
 
 func init() {
