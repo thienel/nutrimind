@@ -107,6 +107,12 @@ var (
 		HTTPStatus: http.StatusConflict,
 	}
 
+	ErrDuplicateEntry = &AppError{
+		Code:       "DUPLICATE_ENTRY",
+		Message:    "Yêu cầu trùng lặp, vui lòng thử lại sau",
+		HTTPStatus: http.StatusConflict,
+	}
+
 	ErrUsernameExists = &AppError{
 		Code:       "USERNAME_EXISTS",
 		Message:    "Tên đăng nhập đã tồn tại",
@@ -131,5 +137,12 @@ var (
 		Code:       "INTERNAL_ERROR",
 		Message:    "Đã xảy ra lỗi máy chủ nội bộ",
 		HTTPStatus: http.StatusInternalServerError,
+	}
+
+	// 503 Service Unavailable
+	ErrAIUnavailable = &AppError{
+		Code:       "AI_UNAVAILABLE",
+		Message:    "AI Coach tạm thời không khả dụng, vui lòng thử lại sau",
+		HTTPStatus: http.StatusServiceUnavailable,
 	}
 )

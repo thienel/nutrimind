@@ -59,6 +59,7 @@ func Init(cfg *config.DatabaseConfig) error {
 			&entity.User{},
 			&entity.HealthProfile{},
 			&entity.WeightEntry{},
+			&entity.MealEntry{},
 		); err != nil {
 			initErr = fmt.Errorf("failed to run auto migrate: %w", err)
 			return
@@ -69,6 +70,14 @@ func Init(cfg *config.DatabaseConfig) error {
 			`CREATE UNIQUE INDEX IF NOT EXISTS idx_weight_entries_user_logged_at ON weight_entries(user_id, logged_at)`,
 		).Error; err != nil {
 			initErr = fmt.Errorf("failed to create unique index on weight_entries: %w", err)
+			return
+		}
+
+		// Non-unique index: fast lookups of meal entries by user + date
+		if err := gormDB.Exec(
+			`CREATE INDEX IF NOT EXISTS idx_meal_entries_user_logged_date ON meal_entries(user_id, logged_date DESC)`,
+		).Error; err != nil {
+			initErr = fmt.Errorf("failed to create index on meal_entries: %w", err)
 			return
 		}
 
