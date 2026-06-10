@@ -13,6 +13,7 @@ type routeRegister struct {
 	user          handler.UserHandler
 	healthProfile handler.HealthProfileHandler
 	healthMetric  handler.HealthMetricHandler
+	meal          handler.MealHandler
 	mw            *middleware.Middleware
 }
 
@@ -22,6 +23,7 @@ func SetupRouter(
 	userHandler handler.UserHandler,
 	healthProfileHandler handler.HealthProfileHandler,
 	healthMetricHandler handler.HealthMetricHandler,
+	mealHandler handler.MealHandler,
 	mw *middleware.Middleware,
 ) *gin.Engine {
 
@@ -30,6 +32,7 @@ func SetupRouter(
 		user:          userHandler,
 		healthProfile: healthProfileHandler,
 		healthMetric:  healthMetricHandler,
+		meal:          mealHandler,
 		mw:            mw,
 	}
 
@@ -52,6 +55,7 @@ func SetupRouter(
 		routes.registerUserRoutes(protected)
 		routes.registerProfileRoutes(protected)
 		routes.registerHealthRoutes(protected)
+		routes.registerMealRoutes(protected)
 	}
 
 	return router
@@ -97,5 +101,15 @@ func (r *routeRegister) registerHealthRoutes(rg *gin.RouterGroup) {
 		health.POST("/weight", r.healthMetric.LogWeight)
 		health.GET("/weight", r.healthMetric.GetWeightHistory)
 		health.GET("/summary", r.healthMetric.GetHealthSummary)
+	}
+}
+
+func (r *routeRegister) registerMealRoutes(rg *gin.RouterGroup) {
+	meals := rg.Group("/meals")
+	{
+		meals.POST("", r.meal.LogMeal)
+		meals.POST("/ai-analyze", r.meal.AIAnalyze)
+		meals.GET("", r.meal.GetMealsByDate)
+		meals.DELETE("/:id", r.meal.DeleteMeal)
 	}
 }
