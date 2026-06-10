@@ -59,6 +59,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	healthMetricService := serviceimpl.NewHealthMetricService(healthProfileRepo, weightEntryRepo)
 	mealService := serviceimpl.NewMealService(mealEntryRepo, dupChecker, aiAnalyzer)
 	waterService := serviceimpl.NewWaterService(waterEntryRepo, healthProfileRepo)
+	aiCoachService := serviceimpl.NewAICoachService(healthProfileRepo, mealEntryRepo, waterEntryRepo, aiAnalyzer)
 
 	// Middleware
 	origins := strings.Join(cfg.CORSAllowedOrigins, ",")
@@ -71,9 +72,10 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	healthMetricHandler := handler.NewHealthMetricHandler(healthMetricService)
 	mealHandler := handler.NewMealHandler(mealService)
 	waterHandler := handler.NewWaterHandler(waterService)
+	aiCoachHandler := handler.NewAICoachHandler(aiCoachService)
 
 	// Build router
-	return router.SetupRouter(authHandler, userHandler, healthProfileHandler, healthMetricHandler, mealHandler, waterHandler, mw)
+	return router.SetupRouter(authHandler, userHandler, healthProfileHandler, healthMetricHandler, mealHandler, waterHandler, aiCoachHandler, mw)
 }
 
 func init() {
