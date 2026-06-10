@@ -73,6 +73,12 @@ type OpenAIConfig struct {
 	Model  string `env:"OPENAI_VISION_MODEL" env-default:"gpt-4o"`
 }
 
+// FirebaseConfig holds Firebase / FCM configuration
+type FirebaseConfig struct {
+	ProjectID       string `env:"FIREBASE_PROJECT_ID"`
+	CredentialsJSON string `env:"FIREBASE_CREDENTIALS_JSON"` // JSON string of service account key; falls back to ADC if empty
+}
+
 // Config holds all application configuration
 type Config struct {
 	Server    ServerConfig
@@ -80,6 +86,7 @@ type Config struct {
 	JWT       JWTConfig
 	Google    GoogleConfig
 	OpenAI    OpenAIConfig
+	Firebase  FirebaseConfig
 	Log       LogConfig
 	Cookie    CookieConfig
 	RateLimit RateLimitConfig
