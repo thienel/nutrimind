@@ -29,15 +29,18 @@ func NewHealthProfileHandler(profileService service.HealthProfileService) Health
 }
 
 // Onboarding godoc
-// @Summary     Complete onboarding
-// @Description Creates or overwrites the health profile and returns calculated nutrition targets.
-// @Tags        profile
-// @Security    BearerAuth
-// @Accept      json
-// @Produce     json
-// @Param       body body dto.OnboardingRequest true "Onboarding data"
-// @Success     201 {object} dto.OnboardingResponse
-// @Router      /api/v1/profile/onboarding [post]
+// @Summary      Complete onboarding
+// @Description  Creates or updates the user's health profile and calculates personalised nutrition targets (BMI, BMR, TDEE, calorie target, macro targets, water target). Can be called multiple times to update profile data.
+// @Tags         profile
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.OnboardingRequest   true  "Onboarding data"
+// @Success      201   {object}  dto.OnboardingResponse        "Profile created, targets calculated"
+// @Failure      400   {object}  response.ErrorResponse    "Validation error (age/height/weight out of range, invalid gender/goal/activity)"
+// @Failure      401   {object}  response.ErrorResponse    "Unauthorized"
+// @Failure      500   {object}  response.ErrorResponse    "Internal server error"
+// @Router       /profile/onboarding [post]
 func (h *healthProfileHandlerImpl) Onboarding(c *gin.Context) {
 	var req dto.OnboardingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -75,13 +78,16 @@ func (h *healthProfileHandlerImpl) Onboarding(c *gin.Context) {
 }
 
 // GetProfile godoc
-// @Summary     Get my profile
-// @Description Returns the authenticated user's full profile with nutrition targets.
-// @Tags        profile
-// @Security    BearerAuth
-// @Produce     json
-// @Success     200 {object} dto.ProfileResponse
-// @Router      /api/v1/profile [get]
+// @Summary      Get my profile
+// @Description  Returns the authenticated user's full health profile including calculated nutrition targets and social settings.
+// @Tags         profile
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  dto.ProfileResponse           "Full profile"
+// @Failure      401  {object}  response.ErrorResponse    "Unauthorized"
+// @Failure      403  {object}  response.ErrorResponse    "ONBOARDING_REQUIRED — profile not yet created"
+// @Failure      500  {object}  response.ErrorResponse    "Internal server error"
+// @Router       /profile [get]
 func (h *healthProfileHandlerImpl) GetProfile(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -95,15 +101,19 @@ func (h *healthProfileHandlerImpl) GetProfile(c *gin.Context) {
 }
 
 // UpdateProfile godoc
-// @Summary     Update profile
-// @Description Partially updates the profile and recalculates nutrition targets.
-// @Tags        profile
-// @Security    BearerAuth
-// @Accept      json
-// @Produce     json
-// @Param       body body dto.UpdateProfileRequest true "Fields to update"
-// @Success     200 {object} dto.ProfileResponse
-// @Router      /api/v1/profile [patch]
+// @Summary      Update profile
+// @Description  Partially updates one or more profile fields (age, gender, height, weight, goal, activity_level) and recalculates all nutrition targets. At least one field required.
+// @Tags         profile
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.UpdateProfileRequest  true  "Fields to update (all optional, min 1)"
+// @Success      200   {object}  dto.ProfileResponse            "Updated profile with recalculated targets"
+// @Failure      400   {object}  response.ErrorResponse     "Validation error or no fields provided"
+// @Failure      401   {object}  response.ErrorResponse     "Unauthorized"
+// @Failure      403   {object}  response.ErrorResponse     "ONBOARDING_REQUIRED"
+// @Failure      500   {object}  response.ErrorResponse     "Internal server error"
+// @Router       /profile [patch]
 func (h *healthProfileHandlerImpl) UpdateProfile(c *gin.Context) {
 	var req dto.UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -131,15 +141,19 @@ func (h *healthProfileHandlerImpl) UpdateProfile(c *gin.Context) {
 }
 
 // ToggleSocial godoc
-// @Summary     Toggle social feature
-// @Description Enables or disables the social feature for the current user.
-// @Tags        profile
-// @Security    BearerAuth
-// @Accept      json
-// @Produce     json
-// @Param       body body dto.SocialToggleRequest true "social_enabled flag"
-// @Success     200 {object} dto.SocialToggleResponse
-// @Router      /api/v1/profile/social [patch]
+// @Summary      Toggle social features
+// @Description  Enables or disables social features for the current user. When disabled, the user is hidden from friends' feeds and all /social/* endpoints return 403 SOCIAL_DISABLED.
+// @Tags         profile
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.SocialToggleRequest   true  "social_enabled flag"
+// @Success      200   {object}  dto.SocialToggleResponse        "Social setting updated"
+// @Failure      400   {object}  response.ErrorResponse      "Malformed request body"
+// @Failure      401   {object}  response.ErrorResponse      "Unauthorized"
+// @Failure      403   {object}  response.ErrorResponse      "ONBOARDING_REQUIRED"
+// @Failure      500   {object}  response.ErrorResponse      "Internal server error"
+// @Router       /profile/social [patch]
 func (h *healthProfileHandlerImpl) ToggleSocial(c *gin.Context) {
 	var req dto.SocialToggleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
