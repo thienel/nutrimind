@@ -88,6 +88,45 @@ definitions:
       met_goal:
         type: boolean
     type: object
+  dto.EmailAuthResponse:
+    properties:
+      app_token:
+        type: string
+      expires_in:
+        type: integer
+      is_first_login:
+        type: boolean
+      refresh_expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.EmailLoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.EmailRegisterRequest:
+    properties:
+      display_name:
+        type: string
+      email:
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - display_name
+    - email
+    - password
+    type: object
   dto.EnrollmentSummaryResponse:
     properties:
       day_current:
@@ -1120,6 +1159,41 @@ paths:
       summary: Sign in with Google
       tags:
       - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Validates email + password credentials and returns a signed token
+        pair.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EmailLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sign-in successful
+          schema:
+            $ref: '#/definitions/dto.EmailAuthResponse'
+        "400":
+          description: Missing or invalid request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Sign in with email and password
+      tags:
+      - auth
   /auth/me:
     get:
       description: Returns the authenticated user's basic profile derived from the
@@ -1177,6 +1251,41 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       summary: Refresh token pair
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new account with email + password and returns a signed
+        token pair.
+      parameters:
+      - description: Registration details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EmailRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Registration successful
+          schema:
+            $ref: '#/definitions/dto.EmailAuthResponse'
+        "400":
+          description: Missing or invalid request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Email already in use
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Register with email and password
       tags:
       - auth
   /auth/signout:
