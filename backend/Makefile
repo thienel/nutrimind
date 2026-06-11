@@ -52,7 +52,7 @@ clean:
 
 # Generate swagger docs (requires swag)
 swagger:
-	@swag init -g cmd/server/main.go -o docs
+	@swag init -g cmd/server/main.go --outputTypes go,json,yaml -o ../docs/swagger
 
 # Show help
 help:
@@ -66,29 +66,3 @@ help:
 	@echo "  tidy           - Tidy dependencies"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  swagger        - Generate swagger docs"
-	@echo "  ent/gen        - Generate Ent code"
-	@echo "  ent/new        - Create a new Ent schema (usage: make ent/new NAME=User)"
-	@echo "  migrate/diff   - Create a migration file based on schema changes (usage: make migrate/diff NAME=add_users)"
-	@echo "  migrate/apply  - Apply pending migrations to the database (usage: make migrate/apply DB_URL=...)"
-
-# Generate Ent code
-ent/gen:
-	@go generate ./internal/ent
-
-# Create a new Ent schema (usage: make ent/new NAME=User)
-ent/new:
-	@go run -mod=mod entgo.io/ent/cmd/ent new --target internal/ent/schema $(NAME)
-
-# Create a new migration file based on Ent schema changes
-migrate/diff:
-	@atlas migrate diff $(NAME) \
-	  --dir "file://internal/ent/migrate/migrations" \
-	  --to "ent://internal/ent/schema" \
-	  --dev-url "docker://postgres/15/test"
-
-# Apply pending migrations to the database
-DB_URL ?= "postgres://username:password@localhost:5432/go_backend_template?search_path=public&sslmode=disable"
-migrate/apply:
-	@atlas migrate apply \
-	  --dir "file://internal/ent/migrate/migrations" \
-	  --url $(DB_URL)
