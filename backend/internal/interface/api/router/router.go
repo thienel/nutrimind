@@ -81,6 +81,8 @@ func (r *routeRegister) registerAuthRoutes(rg *gin.RouterGroup) {
 	auth := rg.Group("/auth")
 	{
 		auth.POST("/google", r.auth.GoogleSignIn)
+		auth.POST("/register", r.auth.Register)
+		auth.POST("/login", r.auth.EmailLogin)
 		auth.POST("/refresh", r.auth.RefreshToken)
 		auth.GET("/me", r.mw.Auth(), r.auth.GetMe)
 		auth.POST("/signout", r.mw.Auth(), r.auth.SignOut)
