@@ -1,6 +1,6 @@
 # NutriMind — Mobile Offline & Authentication Specification
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Stack:** React Native · SQLite (expo-sqlite) · expo-secure-store  
 **Phạm vi:** Xác thực người dùng, các chức năng hoạt động offline và cơ chế sync lên server  
 **Date:** June 2026
@@ -11,6 +11,17 @@
 
 1. [Tổng quan](#1-tổng-quan)
 2. [Authentication Flow](#2-authentication-flow)
+   - [2.1 Tổng quan Auth](#21-tổng-quan-auth)
+   - [2.2 Cấu hình Google Sign-In](#22-cấu-hình-google-sign-in)
+   - [2.3 Đăng ký bằng Email & Password](#23-đăng-ký-bằng-email--password)
+   - [2.4 Đăng nhập bằng Email & Password](#24-đăng-nhập-bằng-email--password)
+   - [2.5 Đăng nhập bằng Google](#25-đăng-nhập-bằng-google)
+   - [2.6 Kiểm tra auth khi app khởi động](#26-kiểm-tra-auth-khi-app-khởi-động-app-startup-check)
+   - [2.7 Silent Token Refresh](#27-silent-token-refresh)
+   - [2.8 Pull initial data sau đăng nhập](#28-pull-initial-data-sau-đăng-nhập--app-startup)
+   - [2.9 Force Sign-Out](#29-force-sign-out-do-auth-failure)
+   - [2.10 Sign-Out thủ công](#210-sign-out-thủ-công-user-chọn)
+   - [2.11 Interceptor API cho 401](#211-interceptor-api-cho-401)
 3. [Phạm vi Offline](#3-phạm-vi-offline)
 4. [Local SQLite Schema](#4-local-sqlite-schema)
 5. [Sync Queue — Cơ chế cốt lõi](#5-sync-queue--cơ-chế-cốt-lõi)
@@ -67,9 +78,15 @@ NutriMind áp dụng mô hình **offline-first có chọn lọc**: các thao tá
 
 ### 2.1 Tổng quan Auth
 
-NutriMind chỉ hỗ trợ đăng nhập bằng **Google Sign-In**. Không có username/password.
+NutriMind hỗ trợ **hai phương thức đăng nhập**:
 
-**Thư viện:** `@react-native-google-signin/google-signin`  
+| Phương thức | Endpoint | Thư viện |
+|-------------|----------|----------|
+| **Google Sign-In** | `POST /auth/google` | `@react-native-google-signin/google-signin` |
+| **Email & Password** | `POST /auth/register` (đăng ký) · `POST /auth/login` (đăng nhập) | — |
+
+Cả hai phương thức đều trả về cùng cấu trúc token và sử dụng cùng cơ chế lưu trữ, refresh, và sign-out. Một tài khoản email có thể được liên kết với Google sau — server tự động link khi đăng nhập Google với cùng email.
+
 **Token storage:** `expo-secure-store` (Keychain trên iOS, Keystore trên Android — encrypted)  
 **Token scheme:** JWT `app_token` (30 ngày) + `refresh_token` (90 ngày), không dùng cookie
 
@@ -99,7 +116,98 @@ GoogleSignin.configure({
 
 ---
 
-### 2.3 Luồng đăng nhập lần đầu / đăng nhập lại
+### 2.3 Đăng ký bằng Email & Password
+
+**Điều kiện:** Không cần Google account. User cung cấp email, mật khẩu (tối thiểu 8 ký tự), và tên hiển thị.
+
+```
+User nhập email, password, display_name
+    │
+    ▼
+Client validate:
+  - email hợp lệ (có @, format đúng)
+  - password >= 8 ký tự
+  - display_name không rỗng
+    │ fail → hiển thị lỗi inline, dừng
+    │ pass ↓
+    ▼
+POST /api/v1/auth/register
+Body: { email, password, display_name }
+    │
+    ├── 400 → Validation lỗi (email không hợp lệ, password quá ngắn)
+    │         Hiển thị lỗi tương ứng
+    │
+    ├── 409 → Email đã được sử dụng
+    │         Hiển thị "Email này đã được đăng ký. Vui lòng đăng nhập."
+    │
+    └── 201 ↓
+        {
+          app_token, expires_in,
+          refresh_token, refresh_expires_in,
+          is_first_login: true,
+          user: { id, display_name, email, photo_url, ... }
+        }
+    │
+    ▼
+Lưu vào SecureStore:
+  nutrimind_app_token          = app_token
+  nutrimind_refresh_token      = refresh_token
+  nutrimind_refresh_expires_at = now() + refresh_expires_in (seconds)
+    │
+    ▼
+is_first_login luôn = true → Navigate to Onboarding screen
+```
+
+> **Lưu ý bảo mật:** Password được hash bằng bcrypt trên server trước khi lưu. Client không bao giờ nhận lại password từ server.  
+> **Welcome email:** Server gửi email chào mừng về địa chỉ đã đăng ký (không block quá trình đăng ký nếu SMTP lỗi).
+
+---
+
+### 2.4 Đăng nhập bằng Email & Password
+
+```
+User nhập email, password
+    │
+    ▼
+POST /api/v1/auth/login
+Body: { email, password }
+    │
+    ├── 400 → Body không hợp lệ
+    │
+    ├── 401 → "Email hoặc mật khẩu không đúng"
+    │         (server không phân biệt sai email / sai password
+    │          để tránh email enumeration)
+    │
+    ├── 401 → Tài khoản tạo qua Google (không có password)
+    │         Hiển thị "Tài khoản này đăng nhập bằng Google Sign-In."
+    │
+    └── 200 ↓
+        {
+          app_token, expires_in,
+          refresh_token, refresh_expires_in,
+          is_first_login,
+          user: { id, display_name, email, photo_url, ... }
+        }
+    │
+    ▼
+Lưu vào SecureStore (giống đăng ký)
+    │
+    ▼
+is_first_login?
+    │
+    ├── true  → Navigate to Onboarding screen
+    │
+    └── false → Pull initial data (xem 2.8)
+               │
+               ├── pullProfile() trả 403 ONBOARDING_REQUIRED
+               │       → Navigate to Onboarding screen
+               │
+               └── pullProfile() thành công → Navigate to Home
+```
+
+---
+
+### 2.5 Đăng nhập bằng Google
 
 ```
 User nhấn "Đăng nhập bằng Google"
@@ -143,7 +251,7 @@ is_first_login?
     ├── true  → Navigate to Onboarding screen
     │           (không pull data, profile chưa tồn tại)
     │
-    └── false → Pull initial data (xem 2.6)
+    └── false → Pull initial data (xem 2.8)
                │
                ├── pullProfile() trả 403 ONBOARDING_REQUIRED
                │       → Navigate to Onboarding screen
@@ -154,7 +262,7 @@ is_first_login?
 
 ---
 
-### 2.4 Kiểm tra auth khi app khởi động (App Startup Check)
+### 2.6 Kiểm tra auth khi app khởi động (App Startup Check)
 
 Chạy một lần duy nhất trong `App.tsx` (hoặc root navigator) khi app mount.
 
@@ -180,19 +288,19 @@ App khởi động
         │           └── thành công → Navigate to Home
         │
         └── exp <= nowSec + 300 (hết hạn hoặc gần hết)
-                → Thử silent refresh (xem 2.5 Silent Token Refresh)
+                → Thử silent refresh (xem 2.7 Silent Token Refresh)
 ```
 
 ---
 
-### 2.5 Silent Token Refresh
+### 2.7 Silent Token Refresh
 
 Được gọi khi: app_token hết hạn/gần hết hạn, hoặc bất kỳ API call nào trả về `401`.
 
 ```
 Lấy nutrimind_refresh_token từ SecureStore
     │
-    ├── null → Force sign-out (xem 2.7)
+    ├── null → Force sign-out (xem 2.9)
     │
     └── có refresh token ↓
         │
@@ -230,7 +338,7 @@ Lấy nutrimind_refresh_token từ SecureStore
 
 ---
 
-### 2.6 Pull initial data sau đăng nhập / app startup
+### 2.8 Pull initial data sau đăng nhập / app startup
 
 Sau khi xác thực thành công (đăng nhập lại hoặc app startup, `is_first_login = false`):
 
@@ -250,7 +358,7 @@ Tất cả data pull về được insert vào SQLite với `sync_status = 'sync
 
 ---
 
-### 2.7 Force Sign-Out (do auth failure)
+### 2.9 Force Sign-Out (do auth failure)
 
 ```
 Clear SecureStore:
@@ -268,7 +376,7 @@ Hiển thị thông báo: "Phiên đăng nhập đã hết hạn. Vui lòng đă
 
 ---
 
-### 2.8 Sign-Out thủ công (user chọn)
+### 2.10 Sign-Out thủ công (user chọn)
 
 ```
 User chọn Sign Out
@@ -300,7 +408,7 @@ Navigate to Sign-In screen
 
 ---
 
-### 2.9 Interceptor API cho 401
+### 2.11 Interceptor API cho 401
 
 Cấu hình một axios interceptor (hoặc tương đương) để tự động xử lý 401:
 
@@ -354,7 +462,7 @@ axiosInstance.interceptors.response.use(
 
 | Chức năng | Lý do |
 |-----------|-------|
-| Google Sign-In | OAuth flow với Google |
+| Đăng nhập / Đăng ký (mọi phương thức) | Google OAuth flow hoặc xác thực email/password với server |
 | Onboarding / Update Profile | Cần server tính toán và lưu targets |
 | AI Photo Analysis | Gọi OpenAI Vision API |
 | AI Daily Advice | Gọi OpenAI API |
@@ -1031,7 +1139,7 @@ Không giới hạn số lượng pending items trong queue. Khi sync lại sau 
 
 ### 11.3 User đăng xuất khi còn pending items
 
-Đã được xử lý trong [2.8 Sign-Out thủ công](#28-sign-out-thủ-công-user-chọn).
+Đã được xử lý trong [2.10 Sign-Out thủ công](#210-sign-out-thủ-công-user-chọn).
 
 ---
 
@@ -1090,4 +1198,4 @@ NutriMind **không hỗ trợ real-time multi-device sync** trong phiên bản n
 
 ---
 
-*NutriMind Mobile Offline & Auth Spec v1.1 — Ho Chi Minh City, June 2026*
+*NutriMind Mobile Offline & Auth Spec v1.2 — Ho Chi Minh City, June 2026*
