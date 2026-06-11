@@ -138,10 +138,11 @@ export function Profile() {
             onPress={() => router.push("/health-profile")}
           />
 
+          {/* SỬA TẠI ĐÂY: Điều hướng chính xác tới trang tổng quan sức khỏe */}
           <MenuItem
             icon={Activity}
             title="Health Summary"
-            onPress={() => router.push("/health-profile")}
+            onPress={() => router.push("/health-summary")}
           />
 
           <MenuItem
