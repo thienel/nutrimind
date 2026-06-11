@@ -33,14 +33,17 @@ func NewAuthHandler(authService service.AuthService, userService service.UserSer
 }
 
 // GoogleSignIn godoc
-// @Summary     Sign in with Google
-// @Description Verifies a Google ID token and returns a signed app token + refresh token
-// @Tags        auth
-// @Accept      json
-// @Produce     json
-// @Param       body body dto.GoogleSignInRequest true "Google ID token"
-// @Success     200 {object} dto.GoogleSignInResponse
-// @Router      /api/auth/google [post]
+// @Summary      Sign in with Google
+// @Description  Verifies a Google ID token and returns a signed JWT app token + refresh token pair. Pass the token from Google Sign-In SDK directly.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.GoogleSignInRequest  true  "Google ID token"
+// @Success      200   {object}  dto.GoogleSignInResponse        "Sign-in successful"
+// @Failure      400   {object}  response.ErrorResponse      "Missing or malformed request body"
+// @Failure      401   {object}  response.ErrorResponse      "Invalid or expired Google ID token"
+// @Failure      500   {object}  response.ErrorResponse      "Internal server error"
+// @Router       /auth/google [post]
 func (h *authHandlerImpl) GoogleSignIn(c *gin.Context) {
 	var req dto.GoogleSignInRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -58,14 +61,17 @@ func (h *authHandlerImpl) GoogleSignIn(c *gin.Context) {
 }
 
 // RefreshToken godoc
-// @Summary     Refresh token pair
-// @Description Validates a refresh token and issues a new app token + refresh token (token rotation)
-// @Tags        auth
-// @Accept      json
-// @Produce     json
-// @Param       body body dto.RefreshTokenRequest true "Refresh token"
-// @Success     200 {object} dto.RefreshTokenResponse
-// @Router      /api/auth/refresh [post]
+// @Summary      Refresh token pair
+// @Description  Validates a refresh token and issues a new app token + refresh token pair (token rotation). The old refresh token is invalidated immediately.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.RefreshTokenRequest  true  "Refresh token"
+// @Success      200   {object}  dto.RefreshTokenResponse        "New token pair issued"
+// @Failure      400   {object}  response.ErrorResponse      "Missing or malformed request body"
+// @Failure      401   {object}  response.ErrorResponse      "Refresh token invalid, expired, or already revoked"
+// @Failure      500   {object}  response.ErrorResponse      "Internal server error"
+// @Router       /auth/refresh [post]
 func (h *authHandlerImpl) RefreshToken(c *gin.Context) {
 	var req dto.RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -83,13 +89,15 @@ func (h *authHandlerImpl) RefreshToken(c *gin.Context) {
 }
 
 // GetMe godoc
-// @Summary     Get current user
-// @Description Returns the authenticated user's profile
-// @Tags        auth
-// @Security    BearerAuth
-// @Produce     json
-// @Success     200 {object} dto.UserResponse
-// @Router      /api/auth/me [get]
+// @Summary      Get current user
+// @Description  Returns the authenticated user's basic profile derived from the JWT.
+// @Tags         auth
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  dto.UserResponse              "Authenticated user profile"
+// @Failure      401  {object}  response.ErrorResponse    "Missing, invalid, or expired token"
+// @Failure      500  {object}  response.ErrorResponse    "Internal server error"
+// @Router       /auth/me [get]
 func (h *authHandlerImpl) GetMe(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	user, err := h.userService.GetByID(c.Request.Context(), userID)
@@ -101,15 +109,18 @@ func (h *authHandlerImpl) GetMe(c *gin.Context) {
 }
 
 // SignOut godoc
-// @Summary     Sign out
-// @Description Revokes the provided refresh token. The client must delete its own app token from secure storage.
-// @Tags        auth
-// @Security    BearerAuth
-// @Accept      json
-// @Produce     json
-// @Param       body body dto.SignOutRequest true "Refresh token to revoke"
-// @Success     200
-// @Router      /api/auth/signout [post]
+// @Summary      Sign out
+// @Description  Revokes the provided refresh token, blacklisting it immediately. The client is responsible for deleting its own app token from secure storage.
+// @Tags         auth
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.SignOutRequest        true  "Refresh token to revoke"
+// @Success      200   {object}  response.ErrorResponse      "Signed out successfully"
+// @Failure      400   {object}  response.ErrorResponse      "Missing or malformed request body"
+// @Failure      401   {object}  response.ErrorResponse      "Invalid or expired app token"
+// @Failure      500   {object}  response.ErrorResponse      "Internal server error"
+// @Router       /auth/signout [post]
 func (h *authHandlerImpl) SignOut(c *gin.Context) {
 	var req dto.SignOutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

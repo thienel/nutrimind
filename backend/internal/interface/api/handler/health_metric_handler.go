@@ -33,6 +33,21 @@ func NewHealthMetricHandler(svc service.HealthMetricService) HealthMetricHandler
 	return &healthMetricHandlerImpl{svc: svc}
 }
 
+// LogWeight godoc
+// @Summary      Log weight
+// @Description  Records the user's body weight for a specific date. One entry per day — calling again on the same date returns 409 CONFLICT.
+// @Tags         health
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.LogWeightRequest  true  "Weight entry"
+// @Success      201   {object}  dto.WeightLogResponse       "Weight logged with updated BMI"
+// @Failure      400   {object}  response.ErrorResponse  "Validation error"
+// @Failure      401   {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      403   {object}  response.ErrorResponse  "ONBOARDING_REQUIRED"
+// @Failure      409   {object}  response.ErrorResponse  "CONFLICT — entry already exists for this date"
+// @Failure      500   {object}  response.ErrorResponse  "Internal server error"
+// @Router       /health/weight [post]
 func (h *healthMetricHandlerImpl) LogWeight(c *gin.Context) {
 	var req dto.LogWeightRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -68,6 +83,18 @@ func (h *healthMetricHandlerImpl) LogWeight(c *gin.Context) {
 	})
 }
 
+// GetWeightHistory godoc
+// @Summary      Get weight history
+// @Description  Returns paginated weight entries for the authenticated user, newest first.
+// @Tags         health
+// @Security     BearerAuth
+// @Produce      json
+// @Param        limit   query     int  false  "Page size (default 20)"
+// @Param        offset  query     int  false  "Offset (default 0)"
+// @Success      200     {object}  dto.WeightHistoryResponse   "Paginated weight history"
+// @Failure      401     {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      500     {object}  response.ErrorResponse  "Internal server error"
+// @Router       /health/weight [get]
 func (h *healthMetricHandlerImpl) GetWeightHistory(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
@@ -92,6 +119,17 @@ func (h *healthMetricHandlerImpl) GetWeightHistory(c *gin.Context) {
 	}, "")
 }
 
+// GetHealthSummary godoc
+// @Summary      Get health summary
+// @Description  Returns the user's current nutrition targets (BMI, BMR, TDEE, calorie/macro/water targets), latest weight entry, and 90-day weight chart data.
+// @Tags         health
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  dto.HealthSummaryResponse   "Health summary"
+// @Failure      401  {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      403  {object}  response.ErrorResponse  "ONBOARDING_REQUIRED"
+// @Failure      500  {object}  response.ErrorResponse  "Internal server error"
+// @Router       /health/summary [get]
 func (h *healthMetricHandlerImpl) GetHealthSummary(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	result, err := h.svc.GetHealthSummary(c.Request.Context(), userID)

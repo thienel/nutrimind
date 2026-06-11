@@ -36,11 +36,26 @@ type userHandlerImpl struct {
 	userService service.UserService
 }
 
-// NewUserHandler creates a new user handler
+// NewUserHandler creates a new user handler.
 func NewUserHandler(userService service.UserService) UserHandler {
 	return &userHandlerImpl{userService: userService}
 }
 
+// List godoc
+// @Summary      List users
+// @Description  Returns a paginated list of users. Supports filtering by email, display_name, role, status, and full-text search via the `search` param.
+// @Tags         users
+// @Security     BearerAuth
+// @Produce      json
+// @Param        limit   query     int     false  "Page size (default 20)"
+// @Param        offset  query     int     false  "Offset (default 0)"
+// @Param        search  query     string  false  "Full-text search across display_name and email"
+// @Param        role    query     string  false  "Filter by role (USER | ADMIN)"
+// @Param        status  query     string  false  "Filter by status (ACTIVE | INACTIVE)"
+// @Success      200     {object}  dto.UserListResponse  "Paginated user list"
+// @Failure      401     {object}  response.ErrorResponse           "Unauthorized"
+// @Failure      500     {object}  response.ErrorResponse           "Internal server error"
+// @Router       /users [get]
 func (h *userHandlerImpl) List(c *gin.Context) {
 	params := make(map[string]string)
 	for key, values := range c.Request.URL.Query() {
@@ -75,6 +90,19 @@ func (h *userHandlerImpl) List(c *gin.Context) {
 	}, "")
 }
 
+// GetByID godoc
+// @Summary      Get user by ID
+// @Description  Returns a single user by their numeric ID.
+// @Tags         users
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id   path      int  true  "User ID"
+// @Success      200  {object}  dto.UserResponse            "User found"
+// @Failure      400  {object}  response.ErrorResponse  "Invalid ID format"
+// @Failure      401  {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      404  {object}  response.ErrorResponse  "User not found"
+// @Failure      500  {object}  response.ErrorResponse  "Internal server error"
+// @Router       /users/{id} [get]
 func (h *userHandlerImpl) GetByID(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -91,6 +119,21 @@ func (h *userHandlerImpl) GetByID(c *gin.Context) {
 	response.OK(c, userEntityToResponse(user), "")
 }
 
+// Update godoc
+// @Summary      Update user
+// @Description  Updates a user's role and/or status (admin operation).
+// @Tags         users
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        id    path      int                    true  "User ID"
+// @Param        body  body      dto.UpdateUserRequest  true  "Fields to update"
+// @Success      200   {object}  dto.UserResponse            "Updated user"
+// @Failure      400   {object}  response.ErrorResponse  "Invalid ID or request body"
+// @Failure      401   {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      404   {object}  response.ErrorResponse  "User not found"
+// @Failure      500   {object}  response.ErrorResponse  "Internal server error"
+// @Router       /users/{id} [put]
 func (h *userHandlerImpl) Update(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -117,6 +160,19 @@ func (h *userHandlerImpl) Update(c *gin.Context) {
 	response.OK(c, userEntityToResponse(user), "Cập nhật thành công")
 }
 
+// Delete godoc
+// @Summary      Delete user
+// @Description  Soft-deletes a user by ID (sets deleted_at, preserves data).
+// @Tags         users
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id   path  int  true  "User ID"
+// @Success      204  "User deleted"
+// @Failure      400  {object}  response.ErrorResponse  "Invalid ID format"
+// @Failure      401  {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      404  {object}  response.ErrorResponse  "User not found"
+// @Failure      500  {object}  response.ErrorResponse  "Internal server error"
+// @Router       /users/{id} [delete]
 func (h *userHandlerImpl) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
