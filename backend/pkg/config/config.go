@@ -63,6 +63,15 @@ type FirebaseConfig struct {
 	CredentialsJSON string `env:"FIREBASE_CREDENTIALS_JSON"` // JSON string of service account key; falls back to ADC if empty
 }
 
+// SMTPConfig holds email / SMTP configuration (used for welcome emails, OTP, etc.)
+type SMTPConfig struct {
+	Host     string `env:"SMTP_HOST" env-default:"smtp.gmail.com"`
+	Port     int    `env:"SMTP_PORT" env-default:"587"`
+	Username string `env:"SMTP_USERNAME"`
+	Password string `env:"SMTP_PASSWORD"`
+	From     string `env:"SMTP_FROM"`
+}
+
 // Config holds all application configuration
 type Config struct {
 	Server    ServerConfig
@@ -71,6 +80,7 @@ type Config struct {
 	Google    GoogleConfig
 	OpenAI    OpenAIConfig
 	Firebase  FirebaseConfig
+	SMTP      SMTPConfig
 	Log       LogConfig
 
 	RedisURL           string   `env:"REDIS_URL" env-default:"redis://localhost:6379"`

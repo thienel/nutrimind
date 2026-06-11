@@ -49,6 +49,29 @@ type SignOutRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
+// EmailRegisterRequest represents the email/password registration request
+type EmailRegisterRequest struct {
+	Email       string `json:"email" binding:"required,email"`
+	Password    string `json:"password" binding:"required,min=8"`
+	DisplayName string `json:"display_name" binding:"required"`
+}
+
+// EmailLoginRequest represents the email/password login request
+type EmailLoginRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
+}
+
+// EmailAuthResponse is the unified response for email-based auth (register & login)
+type EmailAuthResponse struct {
+	User             UserResponse `json:"user"`
+	AppToken         string       `json:"app_token"`
+	ExpiresIn        int          `json:"expires_in"`
+	RefreshToken     string       `json:"refresh_token"`
+	RefreshExpiresIn int          `json:"refresh_expires_in"`
+	IsFirstLogin     bool         `json:"is_first_login"`
+}
+
 // UpdateUserRequest represents user update request (admin)
 type UpdateUserRequest struct {
 	Role   string `json:"role,omitempty"`

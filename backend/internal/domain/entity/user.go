@@ -20,10 +20,13 @@ const (
 
 // User is the GORM model for the users table.
 // gorm.Model provides: ID (uint), CreatedAt, UpdatedAt, DeletedAt (soft delete).
+// GoogleID is nullable — email/password users will have nil here.
+// PasswordHash is only set for email/password accounts; Google-only accounts leave it empty.
 type User struct {
 	gorm.Model
-	GoogleID       string     `gorm:"uniqueIndex;not null"`
+	GoogleID       *string    `gorm:"uniqueIndex"`
 	Email          string     `gorm:"uniqueIndex;not null"`
+	PasswordHash   string     `gorm:"column:password_hash"`
 	DisplayName    string     `gorm:"not null"`
 	PhotoURL       string
 	Role           string     `gorm:"default:USER;not null"`

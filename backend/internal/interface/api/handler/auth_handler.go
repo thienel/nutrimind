@@ -14,6 +14,8 @@ import (
 // AuthHandler interface
 type AuthHandler interface {
 	GoogleSignIn(c *gin.Context)
+	Register(c *gin.Context)
+	EmailLogin(c *gin.Context)
 	RefreshToken(c *gin.Context)
 	GetMe(c *gin.Context)
 	SignOut(c *gin.Context)
@@ -52,6 +54,62 @@ func (h *authHandlerImpl) GoogleSignIn(c *gin.Context) {
 	}
 
 	resp, err := h.authService.GoogleSignIn(c.Request.Context(), req.IDToken)
+	if err != nil {
+		response.WriteErrorResponse(c, err)
+		return
+	}
+
+	response.OK(c, resp, "Đăng nhập thành công")
+}
+
+// Register godoc
+// @Summary      Register with email and password
+// @Description  Creates a new account with email + password and returns a signed token pair.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.EmailRegisterRequest  true  "Registration details"
+// @Success      201   {object}  dto.EmailAuthResponse         "Registration successful"
+// @Failure      400   {object}  response.ErrorResponse    "Missing or invalid request body"
+// @Failure      409   {object}  response.ErrorResponse    "Email already in use"
+// @Failure      500   {object}  response.ErrorResponse    "Internal server error"
+// @Router       /auth/register [post]
+func (h *authHandlerImpl) Register(c *gin.Context) {
+	var req dto.EmailRegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.WriteErrorResponse(c, apperror.ErrBadRequest.WithMessage(err.Error()))
+		return
+	}
+
+	resp, err := h.authService.Register(c.Request.Context(), req.Email, req.Password, req.DisplayName)
+	if err != nil {
+		response.WriteErrorResponse(c, err)
+		return
+	}
+
+	response.Created(c, resp, "Đăng ký thành công")
+}
+
+// EmailLogin godoc
+// @Summary      Sign in with email and password
+// @Description  Validates email + password credentials and returns a signed token pair.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.EmailLoginRequest  true  "Login credentials"
+// @Success      200   {object}  dto.EmailAuthResponse      "Sign-in successful"
+// @Failure      400   {object}  response.ErrorResponse "Missing or invalid request body"
+// @Failure      401   {object}  response.ErrorResponse "Invalid credentials"
+// @Failure      500   {object}  response.ErrorResponse "Internal server error"
+// @Router       /auth/login [post]
+func (h *authHandlerImpl) EmailLogin(c *gin.Context) {
+	var req dto.EmailLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.WriteErrorResponse(c, apperror.ErrBadRequest.WithMessage(err.Error()))
+		return
+	}
+
+	resp, err := h.authService.EmailLogin(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		response.WriteErrorResponse(c, err)
 		return
@@ -139,7 +197,7 @@ func (h *authHandlerImpl) SignOut(c *gin.Context) {
 func toUserResponse(user *entity.User) dto.UserResponse {
 	resp := dto.UserResponse{
 		ID:          user.ID,
-		GoogleID:    user.GoogleID,
+		GoogleID:    derefString(user.GoogleID),
 		Email:       user.Email,
 		DisplayName: user.DisplayName,
 		PhotoURL:    user.PhotoURL,
@@ -153,4 +211,11 @@ func toUserResponse(user *entity.User) dto.UserResponse {
 		resp.DeletedAt = &t
 	}
 	return resp
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

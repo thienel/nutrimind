@@ -191,7 +191,7 @@ func (h *userHandlerImpl) Delete(c *gin.Context) {
 func userEntityToResponse(user *entity.User) dto.UserResponse {
 	resp := dto.UserResponse{
 		ID:          user.ID,
-		GoogleID:    user.GoogleID,
+		GoogleID:    derefString(user.GoogleID),
 		Email:       user.Email,
 		DisplayName: user.DisplayName,
 		PhotoURL:    user.PhotoURL,
