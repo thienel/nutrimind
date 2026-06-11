@@ -126,6 +126,10 @@ go.work.sum
 config.json
 secrets.yaml
 
+# Firebase configuration (contains API keys — never commit)
+mobile/google-services.json
+mobile/GoogleService-Info.plist
+
 # ===========================================================================
 # OPERATING SYSTEMS & EDITORS
 # ===========================================================================
