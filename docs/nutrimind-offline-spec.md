@@ -416,13 +416,13 @@ CREATE TABLE IF NOT EXISTS local_meal_entries (
     server_id         INTEGER,           -- uint từ server, null cho đến khi sync xong
     user_id           INTEGER NOT NULL,  -- uint từ server
     food_name         TEXT NOT NULL,
-    meal_type         TEXT NOT NULL,     -- breakfast | lunch | dinner | snack
+    meal_type         TEXT NOT NULL,     -- BREAKFAST | LUNCH | DINNER | SNACK
     calories          REAL NOT NULL,
     protein_g         REAL NOT NULL DEFAULT 0,
     carb_g            REAL NOT NULL DEFAULT 0,
     fat_g             REAL NOT NULL DEFAULT 0,
-    source            TEXT NOT NULL,     -- manual | ai_photo
-    ai_confidence     REAL,              -- null khi source = 'manual'
+    source            TEXT NOT NULL,     -- MANUAL | AI_PHOTO
+    ai_confidence     REAL,              -- null khi source = 'MANUAL'
     logged_date       TEXT NOT NULL,     -- YYYY-MM-DD
     client_created_at TEXT NOT NULL,     -- ISO8601, lúc user tạo
     sync_status       TEXT NOT NULL DEFAULT 'pending',
@@ -750,8 +750,8 @@ Khi mất mạng, các màn hình online-only hiển thị **empty state offline
 2. Client validate:
    - food_name không rỗng
    - calories > 0
-   - meal_type ∈ { breakfast, lunch, dinner, snack }
-   - source ∈ { manual, ai_photo }
+   - meal_type ∈ { BREAKFAST, LUNCH, DINNER, SNACK }
+   - source ∈ { MANUAL, AI_PHOTO }
 3. Tạo:
    local_id = uuidv4()
    client_created_at = new Date().toISOString()
