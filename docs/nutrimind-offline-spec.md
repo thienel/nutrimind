@@ -143,8 +143,13 @@ is_first_login?
     ├── true  → Navigate to Onboarding screen
     │           (không pull data, profile chưa tồn tại)
     │
-    └── false → Pull initial data (xem 2.5)
-               → Navigate to Home
+    └── false → Pull initial data (xem 2.6)
+               │
+               ├── pullProfile() trả 403 ONBOARDING_REQUIRED
+               │       → Navigate to Onboarding screen
+               │         (user tạo account nhưng chưa hoàn thành onboarding)
+               │
+               └── pullProfile() thành công → Navigate to Home
 ```
 
 ---
@@ -171,10 +176,11 @@ App khởi động
         ├── exp > nowSec + 300 (còn hơn 5 phút)
         │       → Token còn hạn, proceed normally
         │       → Pull latest profile từ server (background, không block UI)
-        │       → Navigate to Home
+        │           ├── 403 ONBOARDING_REQUIRED → Navigate to Onboarding screen
+        │           └── thành công → Navigate to Home
         │
         └── exp <= nowSec + 300 (hết hạn hoặc gần hết)
-                → Thử silent refresh (xem 2.5)
+                → Thử silent refresh (xem 2.5 Silent Token Refresh)
 ```
 
 ---
@@ -201,7 +207,10 @@ Lấy nutrimind_refresh_token từ SecureStore
         POST /api/v1/auth/refresh
         Body: { refresh_token }
             │
-            ├── 401 → Refresh token đã bị revoke
+            ├── 401 → Refresh token không hợp lệ hoặc đã bị revoke
+            │         → Force sign-out
+            │
+            ├── 403 → Tài khoản bị vô hiệu hóa
             │         → Force sign-out
             │
             └── 200 ↓
@@ -278,6 +287,7 @@ Kiểm tra sync_queue WHERE status IN ('pending', 'failed')
     │
     ▼
 POST /api/v1/auth/signout
+Header: Authorization: Bearer <app_token>   ← endpoint yêu cầu xác thực
 Body: { refresh_token }    ← revoke refresh token trên server
 (fire-and-forget — không chờ response, proceed dù thành công hay thất bại)
     │
@@ -406,13 +416,13 @@ CREATE TABLE IF NOT EXISTS local_meal_entries (
     server_id         INTEGER,           -- uint từ server, null cho đến khi sync xong
     user_id           INTEGER NOT NULL,  -- uint từ server
     food_name         TEXT NOT NULL,
-    meal_type         TEXT NOT NULL,     -- breakfast | lunch | dinner | snack
+    meal_type         TEXT NOT NULL,     -- BREAKFAST | LUNCH | DINNER | SNACK
     calories          REAL NOT NULL,
     protein_g         REAL NOT NULL DEFAULT 0,
     carb_g            REAL NOT NULL DEFAULT 0,
     fat_g             REAL NOT NULL DEFAULT 0,
-    source            TEXT NOT NULL,     -- manual | ai_photo
-    ai_confidence     REAL,              -- null khi source = 'manual'
+    source            TEXT NOT NULL,     -- MANUAL | AI_PHOTO
+    ai_confidence     REAL,              -- null khi source = 'MANUAL'
     logged_date       TEXT NOT NULL,     -- YYYY-MM-DD
     client_created_at TEXT NOT NULL,     -- ISO8601, lúc user tạo
     sync_status       TEXT NOT NULL DEFAULT 'pending',
@@ -740,8 +750,8 @@ Khi mất mạng, các màn hình online-only hiển thị **empty state offline
 2. Client validate:
    - food_name không rỗng
    - calories > 0
-   - meal_type ∈ { breakfast, lunch, dinner, snack }
-   - source ∈ { manual, ai_photo }
+   - meal_type ∈ { BREAKFAST, LUNCH, DINNER, SNACK }
+   - source ∈ { MANUAL, AI_PHOTO }
 3. Tạo:
    local_id = uuidv4()
    client_created_at = new Date().toISOString()
