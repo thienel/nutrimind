@@ -180,3 +180,5 @@ func (r *userRepositoryImpl) UpdateLastActivityAt(ctx context.Context, userID ui
 	}
 	return nil
 }
+
+var _ repository.UserRepository = (*userRepositoryImpl)(nil)

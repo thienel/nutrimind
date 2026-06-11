@@ -8,9 +8,11 @@
     "scheme": "nutrimind",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.nutrimind.app",
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.nutrimind.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -34,7 +36,10 @@
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin",
+      "expo-secure-store",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,

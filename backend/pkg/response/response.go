@@ -19,6 +19,13 @@ type APIResponse[T any] struct {
 	Error     *Error `json:"error,omitempty"`
 }
 
+// ErrorResponse is a concrete (non-generic) type used only in swagger annotations for error responses.
+type ErrorResponse struct {
+	IsSuccess bool   `json:"is_success"`
+	Message   string `json:"message,omitempty"`
+	Error     *Error `json:"error,omitempty"`
+}
+
 // Error represents an error in the API response
 type Error struct {
 	Code    string       `json:"code"`

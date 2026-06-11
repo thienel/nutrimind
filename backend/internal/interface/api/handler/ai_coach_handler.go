@@ -27,6 +27,19 @@ func NewAICoachHandler(svc service.AICoachService) AICoachHandler {
 	return &aiCoachHandlerImpl{svc: svc}
 }
 
+// GetAdvice godoc
+// @Summary      Get AI nutrition advice
+// @Description  Returns personalised nutrition advice from the AI coach based on today's logged calories and water intake vs. the user's targets. An optional custom prompt can steer the advice. The response always includes a disclaimer field.
+// @Tags         ai
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.GetAdviceRequest  false  "Optional prompt (body may be omitted entirely)"
+// @Success      200   {object}  dto.AdviceResponse          "AI advice with context summary"
+// @Failure      401   {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      403   {object}  response.ErrorResponse  "ONBOARDING_REQUIRED"
+// @Failure      500   {object}  response.ErrorResponse  "Internal server error or AI service error"
+// @Router       /ai/advice [post]
 func (h *aiCoachHandlerImpl) GetAdvice(c *gin.Context) {
 	var req dto.GetAdviceRequest
 	// body is optional — ignore bind error
@@ -54,6 +67,20 @@ func (h *aiCoachHandlerImpl) GetAdvice(c *gin.Context) {
 	}, "")
 }
 
+// GetMealSuggestion godoc
+// @Summary      Get AI meal suggestion
+// @Description  Returns a meal suggestion for a given meal type (breakfast, lunch, dinner, snack) tailored to the user's calorie and macro targets. Estimated nutritional values are included.
+// @Tags         ai
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.GetMealSuggestionRequest  true  "Meal type to suggest for"
+// @Success      200   {object}  dto.MealSuggestionResponse         "Suggested meal with estimated macros and disclaimer"
+// @Failure      400   {object}  response.ErrorResponse         "Validation error (invalid meal_type)"
+// @Failure      401   {object}  response.ErrorResponse         "Unauthorized"
+// @Failure      403   {object}  response.ErrorResponse         "ONBOARDING_REQUIRED"
+// @Failure      500   {object}  response.ErrorResponse         "Internal server error or AI service error"
+// @Router       /ai/meal-suggestion [post]
 func (h *aiCoachHandlerImpl) GetMealSuggestion(c *gin.Context) {
 	var req dto.GetMealSuggestionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

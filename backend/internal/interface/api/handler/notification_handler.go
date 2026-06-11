@@ -33,6 +33,19 @@ func NewNotificationHandler(svc service.NotificationService) NotificationHandler
 	return &notificationHandlerImpl{svc: svc}
 }
 
+// RegisterFCMToken godoc
+// @Summary      Register FCM device token
+// @Description  Registers or updates the Firebase Cloud Messaging token for the authenticated user's device. Call this after sign-in and whenever the FCM token is refreshed by the OS.
+// @Tags         notifications
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.RegisterFCMTokenRequest  true  "FCM token and platform"
+// @Success      200   {object}  response.ErrorResponse        "Token registered"
+// @Failure      400   {object}  response.ErrorResponse        "Validation error"
+// @Failure      401   {object}  response.ErrorResponse        "Unauthorized"
+// @Failure      500   {object}  response.ErrorResponse        "Internal server error"
+// @Router       /notifications/fcm-token [post]
 func (h *notificationHandlerImpl) RegisterFCMToken(c *gin.Context) {
 	var req dto.RegisterFCMTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -53,6 +66,16 @@ func (h *notificationHandlerImpl) RegisterFCMToken(c *gin.Context) {
 	response.OK(c, gin.H{}, "")
 }
 
+// GetReminders godoc
+// @Summary      Get reminder configurations
+// @Description  Returns all reminder configs for the authenticated user (meal reminders, water reminders, etc.) including enabled state, frequency, and time windows.
+// @Tags         reminders
+// @Security     BearerAuth
+// @Produce      json
+// @Success      200  {object}  dto.GetRemindersResponse    "All reminder configs"
+// @Failure      401  {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      500  {object}  response.ErrorResponse  "Internal server error"
+// @Router       /reminders [get]
 func (h *notificationHandlerImpl) GetReminders(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	results, err := h.svc.GetReminders(c.Request.Context(), userID)
@@ -82,6 +105,20 @@ func (h *notificationHandlerImpl) GetReminders(c *gin.Context) {
 	response.OK(c, dto.GetRemindersResponse{Reminders: items}, "")
 }
 
+// UpsertReminder godoc
+// @Summary      Create or update reminder
+// @Description  Creates or updates the reminder config for a given type (e.g. "meal", "water"). Supported fields: enabled, frequency_min, specific_times, window_start, window_end, custom_message.
+// @Tags         reminders
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        type  path      string                  true  "Reminder type (e.g. meal, water)"
+// @Param        body  body      dto.UpsertReminderRequest  true  "Reminder config"
+// @Success      200   {object}  dto.ReminderConfigResponse  "Updated reminder config"
+// @Failure      400   {object}  response.ErrorResponse   "Validation error"
+// @Failure      401   {object}  response.ErrorResponse   "Unauthorized"
+// @Failure      500   {object}  response.ErrorResponse   "Internal server error"
+// @Router       /reminders/{type} [put]
 func (h *notificationHandlerImpl) UpsertReminder(c *gin.Context) {
 	reminderType := c.Param("type")
 
@@ -123,6 +160,18 @@ func (h *notificationHandlerImpl) UpsertReminder(c *gin.Context) {
 	}, "")
 }
 
+// ListNotifications godoc
+// @Summary      List notification history
+// @Description  Returns paginated notification history for the authenticated user (sent push notifications), newest first.
+// @Tags         notifications
+// @Security     BearerAuth
+// @Produce      json
+// @Param        limit   query     int  false  "Page size (default 10)"
+// @Param        offset  query     int  false  "Offset (default 0)"
+// @Success      200     {object}  dto.ListNotificationsResponse  "Paginated notification list"
+// @Failure      401     {object}  response.ErrorResponse     "Unauthorized"
+// @Failure      500     {object}  response.ErrorResponse     "Internal server error"
+// @Router       /notifications [get]
 func (h *notificationHandlerImpl) ListNotifications(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
