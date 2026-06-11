@@ -15,10 +15,11 @@ import (
 const mealDupTTL = 5 * time.Second
 
 type mealServiceImpl struct {
-	mealRepo   repository.MealEntryRepository
-	dupChecker service.MealDupChecker
-	aiAnalyzer service.FoodPhotoAnalyzer
-	userRepo   repository.UserRepository
+	mealRepo    repository.MealEntryRepository
+	dupChecker  service.MealDupChecker
+	aiAnalyzer  service.FoodPhotoAnalyzer
+	userRepo    repository.UserRepository
+	profileRepo repository.HealthProfileRepository
 }
 
 // NewMealService creates a new MealService.
@@ -27,16 +28,21 @@ func NewMealService(
 	dupChecker service.MealDupChecker,
 	aiAnalyzer service.FoodPhotoAnalyzer,
 	userRepo repository.UserRepository,
+	profileRepo repository.HealthProfileRepository,
 ) service.MealService {
 	return &mealServiceImpl{
-		mealRepo:   mealRepo,
-		dupChecker: dupChecker,
-		aiAnalyzer: aiAnalyzer,
-		userRepo:   userRepo,
+		mealRepo:    mealRepo,
+		dupChecker:  dupChecker,
+		aiAnalyzer:  aiAnalyzer,
+		userRepo:    userRepo,
+		profileRepo: profileRepo,
 	}
 }
 
 func (s *mealServiceImpl) LogMeal(ctx context.Context, cmd service.LogMealCommand) (*service.MealEntryResult, error) {
+	if _, err := s.profileRepo.FindByUserID(ctx, cmd.UserID); err != nil {
+		return nil, apperror.ErrOnboardingRequired.WithMessage("Vui lòng hoàn thành onboarding trước khi ghi nhật ký bữa ăn")
+	}
 	if err := validateLogMealCommand(cmd); err != nil {
 		return nil, err
 	}

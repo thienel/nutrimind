@@ -1,0 +1,2589 @@
+basePath: /api/v1
+definitions:
+  dto.AIAnalysisResponse:
+    properties:
+      calories:
+        type: number
+      carb_g:
+        type: number
+      confidence:
+        type: number
+      disclaimer:
+        type: string
+      fat_g:
+        type: number
+      food_name:
+        type: string
+      low_confidence:
+        type: boolean
+      protein_g:
+        type: number
+    type: object
+  dto.AdviceContextSummaryResponse:
+    properties:
+      calorie_target:
+        type: number
+      calories_logged:
+        type: number
+      water_ml_logged:
+        type: integer
+      water_target_ml:
+        type: integer
+    type: object
+  dto.AdviceResponse:
+    properties:
+      advice:
+        type: string
+      context_summary:
+        $ref: '#/definitions/dto.AdviceContextSummaryResponse'
+      disclaimer:
+        type: string
+    type: object
+  dto.CaloriesProgressResponse:
+    properties:
+      logged:
+        type: number
+      target:
+        type: number
+    type: object
+  dto.CatalogueChallengeItemResponse:
+    properties:
+      description:
+        type: string
+      duration_days:
+        type: integer
+      friends_enrolled:
+        type: integer
+      id:
+        type: integer
+      my_enrollment:
+        $ref: '#/definitions/dto.EnrollmentSummaryResponse'
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  dto.ChallengeInfoResponse:
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  dto.DailyMealsResponse:
+    properties:
+      daily_totals:
+        $ref: '#/definitions/dto.MealDailyTotalsResponse'
+      date:
+        type: string
+      meals:
+        $ref: '#/definitions/dto.MealsByTypeResponse'
+    type: object
+  dto.DayGridItemResponse:
+    properties:
+      date:
+        type: string
+      met_goal:
+        type: boolean
+    type: object
+  dto.EnrollmentSummaryResponse:
+    properties:
+      day_current:
+        type: integer
+      day_total:
+        type: integer
+      end_date:
+        type: string
+      enrollment_id:
+        type: integer
+      start_date:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.FeedItemResponse:
+    properties:
+      avatar_url:
+        type: string
+      calories:
+        $ref: '#/definitions/dto.CaloriesProgressResponse'
+      cheer_count_today:
+        type: integer
+      cheer_sent_today:
+        type: string
+      completed_all_goals_today:
+        type: boolean
+      current_streak:
+        type: integer
+      display_name:
+        type: string
+      last_activity_at:
+        type: string
+      macros:
+        $ref: '#/definitions/dto.MacrosResponse'
+      user_id:
+        type: integer
+      water:
+        $ref: '#/definitions/dto.WaterProgressResponse'
+      weight_progress:
+        $ref: '#/definitions/dto.WeightProgressResponse'
+    type: object
+  dto.FriendItemResponse:
+    properties:
+      avatar_url:
+        type: string
+      current_streak:
+        type: integer
+      display_name:
+        type: string
+      last_activity_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  dto.FriendProgressResponse:
+    properties:
+      avatar_url:
+        type: string
+      display_name:
+        type: string
+      grid:
+        items:
+          $ref: '#/definitions/dto.DayGridItemResponse'
+        type: array
+      user_id:
+        type: integer
+    type: object
+  dto.GetAdviceRequest:
+    properties:
+      prompt:
+        description: optional
+        type: string
+    type: object
+  dto.GetChallengeCatalogueResponse:
+    properties:
+      catalogue:
+        items:
+          $ref: '#/definitions/dto.CatalogueChallengeItemResponse'
+        type: array
+    type: object
+  dto.GetChallengeProgressResponse:
+    properties:
+      challenge:
+        $ref: '#/definitions/dto.ChallengeInfoResponse'
+      friends_progress:
+        items:
+          $ref: '#/definitions/dto.FriendProgressResponse'
+        type: array
+      my_progress:
+        $ref: '#/definitions/dto.MyProgressResponse'
+    type: object
+  dto.GetFeedResponse:
+    properties:
+      date:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/dto.FeedItemResponse'
+        type: array
+    type: object
+  dto.GetFriendsResponse:
+    properties:
+      friends:
+        items:
+          $ref: '#/definitions/dto.FriendItemResponse'
+        type: array
+      pending_received:
+        items:
+          $ref: '#/definitions/dto.PendingReceivedItemResponse'
+        type: array
+    type: object
+  dto.GetLeaderboardResponse:
+    properties:
+      note:
+        type: string
+      rankings:
+        items:
+          $ref: '#/definitions/dto.LeaderboardEntryResponse'
+        type: array
+      week_end:
+        type: string
+      week_start:
+        type: string
+    type: object
+  dto.GetMealSuggestionRequest:
+    properties:
+      meal_type:
+        enum:
+        - BREAKFAST
+        - LUNCH
+        - DINNER
+        - SNACK
+        type: string
+    required:
+    - meal_type
+    type: object
+  dto.GetRemindersResponse:
+    properties:
+      reminders:
+        items:
+          $ref: '#/definitions/dto.ReminderConfigResponse'
+        type: array
+    type: object
+  dto.GoogleSignInRequest:
+    properties:
+      id_token:
+        type: string
+    required:
+    - id_token
+    type: object
+  dto.GoogleSignInResponse:
+    properties:
+      app_token:
+        type: string
+      expires_in:
+        description: app token lifetime in seconds
+        type: integer
+      is_first_login:
+        type: boolean
+      refresh_expires_in:
+        description: refresh token lifetime in seconds
+        type: integer
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserResponse'
+    type: object
+  dto.HealthSummaryResponse:
+    properties:
+      bmi:
+        type: number
+      bmi_category:
+        type: string
+      bmr:
+        type: number
+      calorie_target:
+        type: number
+      carb_target_g:
+        type: number
+      fat_target_g:
+        type: number
+      latest_weight:
+        $ref: '#/definitions/dto.LatestWeightSummary'
+      protein_target_g:
+        type: number
+      tdee:
+        type: number
+      water_target_ml:
+        type: integer
+      weight_history:
+        items:
+          $ref: '#/definitions/dto.WeightPointDTO'
+        type: array
+    type: object
+  dto.JoinChallengeResponse:
+    properties:
+      end_date:
+        type: string
+      enrollment_id:
+        type: integer
+      start_date:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.LatestWeightSummary:
+    properties:
+      logged_at:
+        type: string
+      weight_kg:
+        type: number
+    type: object
+  dto.LeaderboardEntryResponse:
+    properties:
+      avatar_url:
+        type: string
+      display_name:
+        type: string
+      goals_completed:
+        type: integer
+      is_me:
+        type: boolean
+      rank:
+        type: integer
+      user_id:
+        type: integer
+    type: object
+  dto.ListNotificationsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.NotificationLogResponse'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.LogMealRequest:
+    properties:
+      ai_confidence:
+        type: number
+      calories:
+        type: number
+      carb_g:
+        type: number
+      client_created_at:
+        type: string
+      fat_g:
+        type: number
+      food_name:
+        maxLength: 200
+        type: string
+      logged_date:
+        type: string
+      meal_type:
+        enum:
+        - BREAKFAST
+        - LUNCH
+        - DINNER
+        - SNACK
+        type: string
+      protein_g:
+        type: number
+      source:
+        enum:
+        - MANUAL
+        - AI_PHOTO
+        type: string
+    required:
+    - calories
+    - food_name
+    - logged_date
+    - meal_type
+    - source
+    type: object
+  dto.LogWaterRequest:
+    properties:
+      client_created_at:
+        type: string
+      logged_date:
+        type: string
+      volume_ml:
+        maximum: 5000
+        type: integer
+    required:
+    - logged_date
+    - volume_ml
+    type: object
+  dto.LogWeightRequest:
+    properties:
+      client_created_at:
+        type: string
+      logged_at:
+        type: string
+      note:
+        maxLength: 200
+        type: string
+      weight_kg:
+        maximum: 500
+        minimum: 15
+        type: number
+    required:
+    - logged_at
+    - weight_kg
+    type: object
+  dto.MacroProgressResponse:
+    properties:
+      logged_g:
+        type: number
+      target_g:
+        type: number
+    type: object
+  dto.MacrosResponse:
+    properties:
+      carb:
+        $ref: '#/definitions/dto.MacroProgressResponse'
+      fat:
+        $ref: '#/definitions/dto.MacroProgressResponse'
+      protein:
+        $ref: '#/definitions/dto.MacroProgressResponse'
+    type: object
+  dto.MealDailyTotalsResponse:
+    properties:
+      calories:
+        type: number
+      carb_g:
+        type: number
+      fat_g:
+        type: number
+      protein_g:
+        type: number
+    type: object
+  dto.MealEntryResponse:
+    properties:
+      calories:
+        type: number
+      carb_g:
+        type: number
+      created_at:
+        type: string
+      fat_g:
+        type: number
+      food_name:
+        type: string
+      id:
+        type: integer
+      logged_date:
+        description: YYYY-MM-DD
+        type: string
+      meal_type:
+        type: string
+      protein_g:
+        type: number
+      source:
+        type: string
+    type: object
+  dto.MealSuggestionResponse:
+    properties:
+      disclaimer:
+        type: string
+      estimated_calories:
+        type: number
+      estimated_carb_g:
+        type: number
+      estimated_fat_g:
+        type: number
+      estimated_protein_g:
+        type: number
+      suggestion:
+        type: string
+    type: object
+  dto.MealsByTypeResponse:
+    properties:
+      breakfast:
+        items:
+          $ref: '#/definitions/dto.MealEntryResponse'
+        type: array
+      dinner:
+        items:
+          $ref: '#/definitions/dto.MealEntryResponse'
+        type: array
+      lunch:
+        items:
+          $ref: '#/definitions/dto.MealEntryResponse'
+        type: array
+      snack:
+        items:
+          $ref: '#/definitions/dto.MealEntryResponse'
+        type: array
+    type: object
+  dto.MyProgressResponse:
+    properties:
+      badge_awarded:
+        type: boolean
+      day_current:
+        type: integer
+      day_total:
+        type: integer
+      end_date:
+        type: string
+      enrollment_id:
+        type: integer
+      grid:
+        items:
+          $ref: '#/definitions/dto.DayGridItemResponse'
+        type: array
+      start_date:
+        type: string
+    type: object
+  dto.NotificationLogResponse:
+    properties:
+      body:
+        type: string
+      deep_link:
+        type: string
+      id:
+        type: integer
+      notification_type:
+        type: string
+      scheduled_at:
+        type: string
+      sent_at:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+    type: object
+  dto.OnboardingRequest:
+    properties:
+      activity_level:
+        enum:
+        - SEDENTARY
+        - LIGHTLY_ACTIVE
+        - MODERATELY_ACTIVE
+        - VERY_ACTIVE
+        type: string
+      age:
+        maximum: 120
+        minimum: 10
+        type: integer
+      gender:
+        enum:
+        - MALE
+        - FEMALE
+        type: string
+      goal:
+        enum:
+        - LOSE_WEIGHT
+        - GAIN_MUSCLE
+        - MAINTAIN
+        - EAT_HEALTHIER
+        type: string
+      height_cm:
+        maximum: 300
+        minimum: 50
+        type: number
+      weight_kg:
+        maximum: 500
+        minimum: 15
+        type: number
+    required:
+    - activity_level
+    - age
+    - gender
+    - goal
+    - height_cm
+    - weight_kg
+    type: object
+  dto.OnboardingResponse:
+    properties:
+      bmi:
+        type: number
+      bmi_category:
+        type: string
+      bmr:
+        type: number
+      calorie_target:
+        type: number
+      carb_target_g:
+        type: number
+      fat_target_g:
+        type: number
+      protein_target_g:
+        type: number
+      tdee:
+        type: number
+      water_target_ml:
+        type: integer
+    type: object
+  dto.PendingReceivedItemResponse:
+    properties:
+      avatar_url:
+        type: string
+      display_name:
+        type: string
+      friendship_id:
+        type: integer
+      requested_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  dto.ProfileResponse:
+    properties:
+      activity_level:
+        type: string
+      age:
+        type: integer
+      avatar_url:
+        type: string
+      bmi:
+        type: number
+      bmi_category:
+        type: string
+      bmr:
+        type: number
+      calorie_target:
+        type: number
+      carb_target_g:
+        type: number
+      created_at:
+        type: string
+      display_name:
+        type: string
+      fat_target_g:
+        type: number
+      gender:
+        type: string
+      goal:
+        type: string
+      height_cm:
+        type: number
+      onboarding_done:
+        type: boolean
+      protein_target_g:
+        type: number
+      social_enabled:
+        type: boolean
+      tdee:
+        type: number
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+      water_target_ml:
+        type: integer
+      weight_kg:
+        type: number
+    type: object
+  dto.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  dto.RefreshTokenResponse:
+    properties:
+      app_token:
+        type: string
+      expires_in:
+        description: app token lifetime in seconds
+        type: integer
+      refresh_expires_in:
+        description: refresh token lifetime in seconds
+        type: integer
+      refresh_token:
+        type: string
+    type: object
+  dto.RegisterFCMTokenRequest:
+    properties:
+      fcm_token:
+        type: string
+      platform:
+        enum:
+        - android
+        - ios
+        type: string
+    required:
+    - fcm_token
+    - platform
+    type: object
+  dto.ReminderConfigResponse:
+    properties:
+      custom_message:
+        type: string
+      enabled:
+        type: boolean
+      frequency_min:
+        type: integer
+      id:
+        type: integer
+      reminder_type:
+        type: string
+      specific_times:
+        items:
+          type: string
+        type: array
+      window_end:
+        type: string
+      window_start:
+        type: string
+    type: object
+  dto.RespondFriendRequestRequest:
+    properties:
+      action:
+        enum:
+        - accept
+        - decline
+        type: string
+    required:
+    - action
+    type: object
+  dto.RespondFriendRequestResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  dto.SearchUsersResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.UserSearchItemResponse'
+        type: array
+    type: object
+  dto.SendCheerRequest:
+    properties:
+      reaction:
+        enum:
+        - keep_going
+        - nice_job
+        - great_progress
+        type: string
+      recipient_id:
+        type: integer
+    required:
+    - reaction
+    - recipient_id
+    type: object
+  dto.SendCheerResponse:
+    properties:
+      cheer_count_today:
+        type: integer
+      cheer_limit:
+        type: integer
+      reaction:
+        type: string
+    type: object
+  dto.SendFriendRequestRequest:
+    properties:
+      addressee_id:
+        type: integer
+    required:
+    - addressee_id
+    type: object
+  dto.SendFriendRequestResponse:
+    properties:
+      friendship_id:
+        type: integer
+      status:
+        type: string
+    type: object
+  dto.SignOutRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  dto.SocialToggleRequest:
+    properties:
+      social_enabled:
+        type: boolean
+    type: object
+  dto.SocialToggleResponse:
+    properties:
+      social_enabled:
+        type: boolean
+    type: object
+  dto.UpdateProfileRequest:
+    properties:
+      activity_level:
+        type: string
+      age:
+        type: integer
+      gender:
+        type: string
+      goal:
+        type: string
+      height_cm:
+        type: number
+      weight_kg:
+        type: number
+    type: object
+  dto.UpdateUserRequest:
+    properties:
+      role:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.UpsertReminderRequest:
+    properties:
+      custom_message:
+        type: string
+      enabled:
+        type: boolean
+      frequency_min:
+        type: integer
+      specific_times:
+        items:
+          type: string
+        type: array
+      window_end:
+        type: string
+      window_start:
+        type: string
+    required:
+    - window_end
+    - window_start
+    type: object
+  dto.UserListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.UserResponse'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  dto.UserResponse:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      google_id:
+        type: string
+      id:
+        type: integer
+      photo_url:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  dto.UserSearchItemResponse:
+    properties:
+      avatar_url:
+        type: string
+      display_name:
+        type: string
+      friendship_status:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  dto.WaterDayResponse:
+    properties:
+      daily_total_ml:
+        type: integer
+      date:
+        type: string
+      entries:
+        items:
+          $ref: '#/definitions/dto.WaterEntryResponse'
+        type: array
+      water_target_ml:
+        type: integer
+    type: object
+  dto.WaterEntryResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      volume_ml:
+        type: integer
+    type: object
+  dto.WaterHistoryItemResponse:
+    properties:
+      date:
+        type: string
+      total_ml:
+        type: integer
+    type: object
+  dto.WaterHistoryResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.WaterHistoryItemResponse'
+        type: array
+      water_target_ml:
+        type: integer
+    type: object
+  dto.WaterLogResponse:
+    properties:
+      created_at:
+        type: string
+      daily_total_ml:
+        type: integer
+      id:
+        type: integer
+      logged_date:
+        type: string
+      volume_ml:
+        type: integer
+      water_target_ml:
+        type: integer
+    type: object
+  dto.WaterProgressResponse:
+    properties:
+      logged_ml:
+        type: integer
+      target_ml:
+        type: integer
+    type: object
+  dto.WeightHistoryResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.WeightLogResponse'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.WeightLogResponse:
+    properties:
+      bmi:
+        type: number
+      bmi_category:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      logged_at:
+        description: YYYY-MM-DD
+        type: string
+      note:
+        type: string
+      weight_kg:
+        type: number
+    type: object
+  dto.WeightPointDTO:
+    properties:
+      logged_at:
+        type: string
+      weight_kg:
+        type: number
+    type: object
+  dto.WeightProgressResponse:
+    properties:
+      available:
+        type: boolean
+      latest_kg:
+        type: number
+      starting_kg:
+        type: number
+    type: object
+  response.Error:
+    properties:
+      code:
+        type: string
+      fields:
+        items:
+          $ref: '#/definitions/response.FieldError'
+        type: array
+      message:
+        type: string
+    type: object
+  response.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/response.Error'
+      is_success:
+        type: boolean
+      message:
+        type: string
+    type: object
+  response.FieldError:
+    properties:
+      field:
+        type: string
+      message:
+        type: string
+    type: object
+host: localhost:8000
+info:
+  contact: {}
+  description: Backend API for the NutriMind nutrition and health tracking mobile
+    app.
+  title: NutriMind API
+  version: "1.0"
+paths:
+  /ai/advice:
+    post:
+      consumes:
+      - application/json
+      description: Returns personalised nutrition advice from the AI coach based on
+        today's logged calories and water intake vs. the user's targets. An optional
+        custom prompt can steer the advice. The response always includes a disclaimer
+        field.
+      parameters:
+      - description: Optional prompt (body may be omitted entirely)
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/dto.GetAdviceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: AI advice with context summary
+          schema:
+            $ref: '#/definitions/dto.AdviceResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error or AI service error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get AI nutrition advice
+      tags:
+      - ai
+  /ai/meal-suggestion:
+    post:
+      consumes:
+      - application/json
+      description: Returns a meal suggestion for a given meal type (breakfast, lunch,
+        dinner, snack) tailored to the user's calorie and macro targets. Estimated
+        nutritional values are included.
+      parameters:
+      - description: Meal type to suggest for
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GetMealSuggestionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Suggested meal with estimated macros and disclaimer
+          schema:
+            $ref: '#/definitions/dto.MealSuggestionResponse'
+        "400":
+          description: Validation error (invalid meal_type)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error or AI service error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get AI meal suggestion
+      tags:
+      - ai
+  /auth/google:
+    post:
+      consumes:
+      - application/json
+      description: Verifies a Google ID token and returns a signed JWT app token +
+        refresh token pair. Pass the token from Google Sign-In SDK directly.
+      parameters:
+      - description: Google ID token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GoogleSignInRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Sign-in successful
+          schema:
+            $ref: '#/definitions/dto.GoogleSignInResponse'
+        "400":
+          description: Missing or malformed request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or expired Google ID token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Sign in with Google
+      tags:
+      - auth
+  /auth/me:
+    get:
+      description: Returns the authenticated user's basic profile derived from the
+        JWT.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Authenticated user profile
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "401":
+          description: Missing, invalid, or expired token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Validates a refresh token and issues a new app token + refresh
+        token pair (token rotation). The old refresh token is invalidated immediately.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New token pair issued
+          schema:
+            $ref: '#/definitions/dto.RefreshTokenResponse'
+        "400":
+          description: Missing or malformed request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Refresh token invalid, expired, or already revoked
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Refresh token pair
+      tags:
+      - auth
+  /auth/signout:
+    post:
+      consumes:
+      - application/json
+      description: Revokes the provided refresh token, blacklisting it immediately.
+        The client is responsible for deleting its own app token from secure storage.
+      parameters:
+      - description: Refresh token to revoke
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SignOutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Signed out successfully
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "400":
+          description: Missing or malformed request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or expired app token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Sign out
+      tags:
+      - auth
+  /health/summary:
+    get:
+      description: Returns the user's current nutrition targets (BMI, BMR, TDEE, calorie/macro/water
+        targets), latest weight entry, and 90-day weight chart data.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Health summary
+          schema:
+            $ref: '#/definitions/dto.HealthSummaryResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get health summary
+      tags:
+      - health
+  /health/weight:
+    get:
+      description: Returns paginated weight entries for the authenticated user, newest
+        first.
+      parameters:
+      - description: Page size (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated weight history
+          schema:
+            $ref: '#/definitions/dto.WeightHistoryResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get weight history
+      tags:
+      - health
+    post:
+      consumes:
+      - application/json
+      description: Records the user's body weight for a specific date. One entry per
+        day — calling again on the same date returns 409 CONFLICT.
+      parameters:
+      - description: Weight entry
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LogWeightRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Weight logged with updated BMI
+          schema:
+            $ref: '#/definitions/dto.WeightLogResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: CONFLICT — entry already exists for this date
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Log weight
+      tags:
+      - health
+  /meals:
+    get:
+      description: Returns all meal entries for a given date, grouped by meal type
+        (breakfast, lunch, dinner, snack), with daily nutrition totals.
+      parameters:
+      - description: Date in YYYY-MM-DD format
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Meals grouped by type with daily totals
+          schema:
+            $ref: '#/definitions/dto.DailyMealsResponse'
+        "400":
+          description: Missing or invalid date
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get meals by date
+      tags:
+      - meals
+    post:
+      consumes:
+      - application/json
+      description: Records a meal entry for the authenticated user. Source must be
+        "manual" or "AI_PHOTO". One meal entry per food item per meal type per day
+        — duplicate entries return 409 CONFLICT.
+      parameters:
+      - description: Meal entry data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LogMealRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Meal logged successfully
+          schema:
+            $ref: '#/definitions/dto.MealEntryResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: CONFLICT — duplicate entry
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Log a meal
+      tags:
+      - meals
+  /meals/{id}:
+    delete:
+      description: Permanently deletes a meal entry by ID. Only the owner can delete
+        their own entries.
+      parameters:
+      - description: Meal entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Meal deleted
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Meal not found or not owned by user
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete meal entry
+      tags:
+      - meals
+  /meals/ai-analyze:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Analyses a food photo using OpenAI Vision and returns estimated
+        nutritional data. Max image size 10 MB (JPEG or PNG only). The result is an
+        estimate — client should display the disclaimer field.
+      parameters:
+      - description: Food photo (JPEG or PNG, max 10 MB)
+        in: formData
+        name: image
+        required: true
+        type: file
+      - description: Optional text hint to help the model (e.g. 'bowl of pho')
+        in: formData
+        name: description
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Analysis result
+          schema:
+            $ref: '#/definitions/dto.AIAnalysisResponse'
+        "400":
+          description: Missing image, wrong format, or file too large
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error or AI service error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: AI photo analysis
+      tags:
+      - meals
+  /notifications:
+    get:
+      description: Returns paginated notification history for the authenticated user
+        (sent push notifications), newest first.
+      parameters:
+      - description: Page size (default 10)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated notification list
+          schema:
+            $ref: '#/definitions/dto.ListNotificationsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List notification history
+      tags:
+      - notifications
+  /notifications/fcm-token:
+    post:
+      consumes:
+      - application/json
+      description: Registers or updates the Firebase Cloud Messaging token for the
+        authenticated user's device. Call this after sign-in and whenever the FCM
+        token is refreshed by the OS.
+      parameters:
+      - description: FCM token and platform
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterFCMTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token registered
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Register FCM device token
+      tags:
+      - notifications
+  /profile:
+    get:
+      description: Returns the authenticated user's full health profile including
+        calculated nutrition targets and social settings.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Full profile
+          schema:
+            $ref: '#/definitions/dto.ProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED — profile not yet created
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my profile
+      tags:
+      - profile
+    patch:
+      consumes:
+      - application/json
+      description: Partially updates one or more profile fields (age, gender, height,
+        weight, goal, activity_level) and recalculates all nutrition targets. At least
+        one field required.
+      parameters:
+      - description: Fields to update (all optional, min 1)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated profile with recalculated targets
+          schema:
+            $ref: '#/definitions/dto.ProfileResponse'
+        "400":
+          description: Validation error or no fields provided
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update profile
+      tags:
+      - profile
+  /profile/onboarding:
+    post:
+      consumes:
+      - application/json
+      description: Creates or updates the user's health profile and calculates personalised
+        nutrition targets (BMI, BMR, TDEE, calorie target, macro targets, water target).
+        Can be called multiple times to update profile data.
+      parameters:
+      - description: Onboarding data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.OnboardingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Profile created, targets calculated
+          schema:
+            $ref: '#/definitions/dto.OnboardingResponse'
+        "400":
+          description: Validation error (age/height/weight out of range, invalid gender/goal/activity)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Complete onboarding
+      tags:
+      - profile
+  /profile/social:
+    patch:
+      consumes:
+      - application/json
+      description: Enables or disables social features for the current user. When
+        disabled, the user is hidden from friends' feeds and all /social/* endpoints
+        return 403 SOCIAL_DISABLED.
+      parameters:
+      - description: social_enabled flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SocialToggleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Social setting updated
+          schema:
+            $ref: '#/definitions/dto.SocialToggleResponse'
+        "400":
+          description: Malformed request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Toggle social features
+      tags:
+      - profile
+  /reminders:
+    get:
+      description: Returns all reminder configs for the authenticated user (meal reminders,
+        water reminders, etc.) including enabled state, frequency, and time windows.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: All reminder configs
+          schema:
+            $ref: '#/definitions/dto.GetRemindersResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get reminder configurations
+      tags:
+      - reminders
+  /reminders/{type}:
+    put:
+      consumes:
+      - application/json
+      description: 'Creates or updates the reminder config for a given type (e.g.
+        "meal", "water"). Supported fields: enabled, frequency_min, specific_times,
+        window_start, window_end, custom_message.'
+      parameters:
+      - description: Reminder type (e.g. meal, water)
+        in: path
+        name: type
+        required: true
+        type: string
+      - description: Reminder config
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpsertReminderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated reminder config
+          schema:
+            $ref: '#/definitions/dto.ReminderConfigResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create or update reminder
+      tags:
+      - reminders
+  /social/challenges:
+    get:
+      description: Returns all available challenges with their type, duration, description,
+        how many of the user's friends are enrolled, and the user's own enrollment
+        summary if they have joined.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Challenge catalogue
+          schema:
+            $ref: '#/definitions/dto.GetChallengeCatalogueResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get challenge catalogue
+      tags:
+      - social
+  /social/challenges/{challenge_id}/enrollment:
+    delete:
+      description: Marks the user's enrollment in a challenge as abandoned. The user
+        may re-join later.
+      parameters:
+      - description: Challenge ID
+        in: path
+        name: challenge_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Enrollment abandoned
+        "400":
+          description: Invalid challenge_id
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Active enrollment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Abandon a challenge
+      tags:
+      - social
+  /social/challenges/{challenge_id}/join:
+    post:
+      description: Enrols the authenticated user in the specified challenge. Returns
+        409 if they are already enrolled in an active run of this challenge.
+      parameters:
+      - description: Challenge ID
+        in: path
+        name: challenge_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Enrollment created with start/end dates
+          schema:
+            $ref: '#/definitions/dto.JoinChallengeResponse'
+        "400":
+          description: Invalid challenge_id
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Challenge not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Already enrolled
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Join a challenge
+      tags:
+      - social
+  /social/challenges/{challenge_id}/progress:
+    get:
+      description: Returns the day-grid progress for the current user and their enrolled
+        friends for a given challenge. Each grid day indicates whether the user met
+        their daily goal.
+      parameters:
+      - description: Challenge ID
+        in: path
+        name: challenge_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Progress for user and friends
+          schema:
+            $ref: '#/definitions/dto.GetChallengeProgressResponse'
+        "400":
+          description: Invalid challenge_id
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Challenge or enrollment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get challenge progress
+      tags:
+      - social
+  /social/cheer:
+    post:
+      consumes:
+      - application/json
+      description: Sends a cheer reaction (emoji) to a friend. A user can send a limited
+        number of cheers per friend per day (cheer_limit in response). Returns 409
+        when the daily limit is reached.
+      parameters:
+      - description: Recipient ID and reaction emoji
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendCheerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Cheer sent with updated daily count and limit
+          schema:
+            $ref: '#/definitions/dto.SendCheerResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED or not friends
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Daily cheer limit reached
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send cheer to a friend
+      tags:
+      - social
+  /social/feed:
+    get:
+      description: Returns today's nutrition progress for each of the user's friends
+        — calories, macros, water, streak, weight progress, and cheer status. Only
+        friends with social features enabled appear.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Today's feed for all friends
+          schema:
+            $ref: '#/definitions/dto.GetFeedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get social feed
+      tags:
+      - social
+  /social/friends:
+    get:
+      description: Returns the user's accepted friends (with streak and last activity)
+        and any pending incoming friend requests awaiting a response.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Friends and pending received requests
+          schema:
+            $ref: '#/definitions/dto.GetFriendsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get friends list
+      tags:
+      - social
+  /social/friends/{user_id}:
+    delete:
+      description: Removes an accepted friendship with the specified user. Both users
+        lose access to each other's feed entries.
+      parameters:
+      - description: Target user ID to unfriend
+        in: path
+        name: user_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Friend removed
+        "400":
+          description: Invalid user_id
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Friendship not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove friend
+      tags:
+      - social
+  /social/friends/request:
+    post:
+      consumes:
+      - application/json
+      description: Sends a friend request to another user. Returns 409 if a pending
+        or accepted friendship already exists.
+      parameters:
+      - description: Addressee user ID
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendFriendRequestRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Friend request created
+          schema:
+            $ref: '#/definitions/dto.SendFriendRequestResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Addressee not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Friendship already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send friend request
+      tags:
+      - social
+  /social/friends/request/{friendship_id}:
+    delete:
+      description: Cancels a pending friend request that the current user sent. Only
+        the requester can cancel.
+      parameters:
+      - description: Friendship ID
+        in: path
+        name: friendship_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Request cancelled
+        "400":
+          description: Invalid friendship_id
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED or not the requester
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Friend request not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel sent friend request
+      tags:
+      - social
+    patch:
+      consumes:
+      - application/json
+      description: Accepts or rejects an incoming friend request identified by friendship_id.
+        Action must be "accept" or "reject".
+      parameters:
+      - description: Friendship ID
+        in: path
+        name: friendship_id
+        required: true
+        type: integer
+      - description: accept or reject
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RespondFriendRequestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated friendship status
+          schema:
+            $ref: '#/definitions/dto.RespondFriendRequestResponse'
+        "400":
+          description: Invalid ID or action
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED or not the addressee
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Friend request not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Accept or reject friend request
+      tags:
+      - social
+  /social/leaderboard:
+    get:
+      description: Returns the weekly leaderboard ranking the user and their friends
+        by number of days they completed all nutrition goals. The current (in-progress)
+        day is excluded.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Weekly leaderboard with week_start/end dates
+          schema:
+            $ref: '#/definitions/dto.GetLeaderboardResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get weekly leaderboard
+      tags:
+      - social
+  /social/users/search:
+    get:
+      description: Searches for other users by display name or email. Returns each
+        result with their current friendship status relative to the caller (none,
+        pending_sent, pending_received, friends).
+      parameters:
+      - description: Search query (display name or email)
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Search results with friendship status
+          schema:
+            $ref: '#/definitions/dto.SearchUsersResponse'
+        "400":
+          description: Missing query parameter q
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: SOCIAL_DISABLED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Search users
+      tags:
+      - social
+  /users:
+    get:
+      description: Returns a paginated list of users. Supports filtering by email,
+        display_name, role, status, and full-text search via the `search` param.
+      parameters:
+      - description: Page size (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Full-text search across display_name and email
+        in: query
+        name: search
+        type: string
+      - description: Filter by role (USER | ADMIN)
+        in: query
+        name: role
+        type: string
+      - description: Filter by status (ACTIVE | INACTIVE)
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated user list
+          schema:
+            $ref: '#/definitions/dto.UserListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - users
+  /users/{id}:
+    delete:
+      description: Soft-deletes a user by ID (sets deleted_at, preserves data).
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: User deleted
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete user
+      tags:
+      - users
+    get:
+      description: Returns a single user by their numeric ID.
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User found
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "400":
+          description: Invalid ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user by ID
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Updates a user's role and/or status (admin operation).
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated user
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "400":
+          description: Invalid ID or request body
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user
+      tags:
+      - users
+  /water:
+    get:
+      description: Returns all individual water intake entries for a given date, with
+        the day's running total and the user's daily water target.
+      parameters:
+      - description: Date in YYYY-MM-DD format
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Water entries for the day
+          schema:
+            $ref: '#/definitions/dto.WaterDayResponse'
+        "400":
+          description: Missing or invalid date
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get water intake by date
+      tags:
+      - water
+    post:
+      consumes:
+      - application/json
+      description: Records a water intake entry for the given date. Multiple entries
+        per day are allowed (e.g. each glass separately).
+      parameters:
+      - description: Water intake data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LogWaterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Entry logged with updated daily total and target
+          schema:
+            $ref: '#/definitions/dto.WaterLogResponse'
+        "400":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: ONBOARDING_REQUIRED
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Log water intake
+      tags:
+      - water
+  /water/{id}:
+    delete:
+      description: Permanently deletes a single water intake entry by ID. Only the
+        owner can delete their own entries.
+      parameters:
+      - description: Water entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Entry deleted
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Entry not found or not owned by user
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete water entry
+      tags:
+      - water
+  /water/history:
+    get:
+      description: Returns daily aggregated water totals for a date range (from–to
+        inclusive). "to" must be >= "from".
+      parameters:
+      - description: Start date YYYY-MM-DD
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: End date YYYY-MM-DD (must be >= from)
+        in: query
+        name: to
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Daily totals for the range with water target
+          schema:
+            $ref: '#/definitions/dto.WaterHistoryResponse'
+        "400":
+          description: Missing, invalid, or inverted date range
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get water history range
+      tags:
+      - water
+securityDefinitions:
+  BearerAuth:
+    description: 'JWT Bearer token — format: "Bearer {token}"'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

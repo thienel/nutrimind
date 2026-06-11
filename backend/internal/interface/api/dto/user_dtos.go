@@ -63,3 +63,12 @@ type ListResponse[T any] struct {
 	Limit      int   `json:"limit"`
 	TotalPages int   `json:"total_pages"`
 }
+
+// UserListResponse is a concrete type used only in swagger annotations for paginated user lists.
+type UserListResponse struct {
+	Items      []UserResponse `json:"items"`
+	Total      int64          `json:"total"`
+	Page       int            `json:"page"`
+	Limit      int            `json:"limit"`
+	TotalPages int            `json:"total_pages"`
+}

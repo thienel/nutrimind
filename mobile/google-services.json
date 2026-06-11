@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "554505712919",
+    "project_id": "nutrimind-mma301",
+    "storage_bucket": "nutrimind-mma301.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:554505712919:android:45b2c8f8c08b9ca32b7352",
+        "android_client_info": {
+          "package_name": "com.nutrimind.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "554505712919-cv2572i34ccji4k0pe3e50ql0b17o9ni.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nutrimind.app",
+            "certificate_hash": "b610d8cef4ed4980a8e31d1cbb063ffbdf66c42c"
+          }
+        },
+        {
+          "client_id": "554505712919-d4h8is1kpd4eg6fu43qk560rqm7hrc72.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAl6po8aPAfxcFNh6onrVzo4NKUAvqcH5I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "554505712919-d4h8is1kpd4eg6fu43qk560rqm7hrc72.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "554505712919-q2fa9c9hhff9c1r6t700lmb0boj5p9g2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nutrimind.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -30,6 +30,9 @@ func NewWaterService(
 }
 
 func (s *waterServiceImpl) LogWater(ctx context.Context, cmd service.LogWaterCommand) (*service.WaterLogResult, error) {
+	if _, err := s.profileRepo.FindByUserID(ctx, cmd.UserID); err != nil {
+		return nil, apperror.ErrOnboardingRequired.WithMessage("Vui lòng hoàn thành onboarding trước khi ghi nhật ký nước uống")
+	}
 	if cmd.VolumeMl <= 0 {
 		return nil, apperror.ErrValidation.WithMessage("Lượng nước phải lớn hơn 0")
 	}

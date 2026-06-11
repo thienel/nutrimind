@@ -45,22 +45,6 @@ type LogConfig struct {
 	Compress      bool   `env:"LOG_COMPRESS" env-default:"true"`
 }
 
-// CookieConfig holds cookie configuration
-type CookieConfig struct {
-	Name        string `env:"COOKIE_NAME" env-default:"app_token"`
-	RefreshName string `env:"COOKIE_REFRESH_NAME" env-default:"app_refresh"`
-	Domain      string `env:"COOKIE_DOMAIN"`
-	Secure      bool   `env:"COOKIE_SECURE" env-default:"false"`
-	SameSite    string `env:"COOKIE_SAMESITE" env-default:"Lax"`
-	Path        string `env:"COOKIE_PATH" env-default:"/"`
-}
-
-// RateLimitConfig holds rate limiting configuration
-type RateLimitConfig struct {
-	Enabled           bool `env:"RATE_LIMIT_ENABLED" env-default:"true"`
-	RequestsPerMinute int  `env:"RATE_LIMIT_REQUESTS_PER_MIN" env-default:"60"`
-}
-
 // GoogleConfig holds Google OAuth configuration
 type GoogleConfig struct {
 	ClientID    string `env:"GOOGLE_CLIENT_ID"`
@@ -88,8 +72,6 @@ type Config struct {
 	OpenAI    OpenAIConfig
 	Firebase  FirebaseConfig
 	Log       LogConfig
-	Cookie    CookieConfig
-	RateLimit RateLimitConfig
 
 	RedisURL           string   `env:"REDIS_URL" env-default:"redis://localhost:6379"`
 	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" env-default:"http://localhost:3000"`
