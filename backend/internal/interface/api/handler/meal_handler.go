@@ -39,6 +39,21 @@ func NewMealHandler(svc service.MealService) MealHandler {
 	return &mealHandlerImpl{svc: svc}
 }
 
+// LogMeal godoc
+// @Summary      Log a meal
+// @Description  Records a meal entry for the authenticated user. Source must be "manual" or "AI_PHOTO". One meal entry per food item per meal type per day — duplicate entries return 409 CONFLICT.
+// @Tags         meals
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        body  body      dto.LogMealRequest   true  "Meal entry data"
+// @Success      201   {object}  dto.MealEntryResponse       "Meal logged successfully"
+// @Failure      400   {object}  response.ErrorResponse  "Validation error"
+// @Failure      401   {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      403   {object}  response.ErrorResponse  "ONBOARDING_REQUIRED"
+// @Failure      409   {object}  response.ErrorResponse  "CONFLICT — duplicate entry"
+// @Failure      500   {object}  response.ErrorResponse  "Internal server error"
+// @Router       /meals [post]
 func (h *mealHandlerImpl) LogMeal(c *gin.Context) {
 	var req dto.LogMealRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -76,6 +91,20 @@ func (h *mealHandlerImpl) LogMeal(c *gin.Context) {
 	response.Created(c, toMealEntryResponse(result), "Đã lưu bữa ăn thành công")
 }
 
+// AIAnalyze godoc
+// @Summary      AI photo analysis
+// @Description  Analyses a food photo using OpenAI Vision and returns estimated nutritional data. Max image size 10 MB (JPEG or PNG only). The result is an estimate — client should display the disclaimer field.
+// @Tags         meals
+// @Security     BearerAuth
+// @Accept       multipart/form-data
+// @Produce      json
+// @Param        image        formData  file    true   "Food photo (JPEG or PNG, max 10 MB)"
+// @Param        description  formData  string  false  "Optional text hint to help the model (e.g. 'bowl of pho')"
+// @Success      200  {object}  dto.AIAnalysisResponse      "Analysis result"
+// @Failure      400  {object}  response.ErrorResponse  "Missing image, wrong format, or file too large"
+// @Failure      401  {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      500  {object}  response.ErrorResponse  "Internal server error or AI service error"
+// @Router       /meals/ai-analyze [post]
 func (h *mealHandlerImpl) AIAnalyze(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxImageSizeBytes+1024)
 
@@ -122,6 +151,18 @@ func (h *mealHandlerImpl) AIAnalyze(c *gin.Context) {
 	}, "")
 }
 
+// GetMealsByDate godoc
+// @Summary      Get meals by date
+// @Description  Returns all meal entries for a given date, grouped by meal type (breakfast, lunch, dinner, snack), with daily nutrition totals.
+// @Tags         meals
+// @Security     BearerAuth
+// @Produce      json
+// @Param        date  query     string  true  "Date in YYYY-MM-DD format"
+// @Success      200   {object}  dto.DailyMealsResponse      "Meals grouped by type with daily totals"
+// @Failure      400   {object}  response.ErrorResponse  "Missing or invalid date"
+// @Failure      401   {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      500   {object}  response.ErrorResponse  "Internal server error"
+// @Router       /meals [get]
 func (h *mealHandlerImpl) GetMealsByDate(c *gin.Context) {
 	dateStr := c.Query("date")
 	if dateStr == "" {
@@ -159,6 +200,19 @@ func (h *mealHandlerImpl) GetMealsByDate(c *gin.Context) {
 	}, "")
 }
 
+// DeleteMeal godoc
+// @Summary      Delete meal entry
+// @Description  Permanently deletes a meal entry by ID. Only the owner can delete their own entries.
+// @Tags         meals
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id   path  int  true  "Meal entry ID"
+// @Success      204  "Meal deleted"
+// @Failure      400  {object}  response.ErrorResponse  "Invalid ID"
+// @Failure      401  {object}  response.ErrorResponse  "Unauthorized"
+// @Failure      404  {object}  response.ErrorResponse  "Meal not found or not owned by user"
+// @Failure      500  {object}  response.ErrorResponse  "Internal server error"
+// @Router       /meals/{id} [delete]
 func (h *mealHandlerImpl) DeleteMeal(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
