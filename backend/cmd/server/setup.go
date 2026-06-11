@@ -79,7 +79,7 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 	userService := serviceimpl.NewUserService(userRepo)
 	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo, weightEntryRepo)
 	healthMetricService := serviceimpl.NewHealthMetricService(healthProfileRepo, weightEntryRepo)
-	mealService := serviceimpl.NewMealService(mealEntryRepo, dupChecker, aiAnalyzer, userRepo)
+	mealService := serviceimpl.NewMealService(mealEntryRepo, dupChecker, aiAnalyzer, userRepo, healthProfileRepo)
 	waterService := serviceimpl.NewWaterService(waterEntryRepo, healthProfileRepo, userRepo)
 	aiCoachService := serviceimpl.NewAICoachService(healthProfileRepo, mealEntryRepo, waterEntryRepo, aiAnalyzer)
 	notifService := serviceimpl.NewNotificationService(deviceRepo, reminderRepo, notifRepo)
