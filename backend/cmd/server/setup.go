@@ -14,6 +14,7 @@ import (
 	"nutrimind-backend/internal/infra/aiclient"
 	"nutrimind-backend/internal/infra/cache"
 	"nutrimind-backend/internal/infra/database"
+	"nutrimind-backend/internal/infra/email"
 	"nutrimind-backend/internal/infra/fcm"
 	"nutrimind-backend/internal/infra/persistence"
 	"nutrimind-backend/internal/infra/scheduler"
@@ -73,9 +74,17 @@ func setupDependencies(cfg *config.Config) *gin.Engine {
 		fcmSender = fcm.NewNoopSender()
 	}
 
+	// Email sender — falls back to noop when SMTP is not configured
+	var emailSender email.Sender
+	if cfg.SMTP.Username != "" {
+		emailSender = email.NewSMTPSender(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From)
+	} else {
+		emailSender = email.NewNoopSender()
+	}
+
 	// Services
 	jwtService := serviceimpl.NewJWTService(cfg.JWT.Secret, cfg.JWT.AppExpiryDays, cfg.JWT.RefreshExpiryDays)
-	authService := serviceimpl.NewAuthService(userRepo, jwtService, tokenBlacklist, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
+	authService := serviceimpl.NewAuthService(userRepo, jwtService, tokenBlacklist, emailSender, cfg.Google.ClientID, cfg.Google.ClientIDIOS)
 	userService := serviceimpl.NewUserService(userRepo)
 	healthProfileService := serviceimpl.NewHealthProfileService(healthProfileRepo, userRepo, weightEntryRepo)
 	healthMetricService := serviceimpl.NewHealthMetricService(healthProfileRepo, weightEntryRepo)
