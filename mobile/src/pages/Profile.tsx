@@ -8,11 +8,12 @@ import {
 } from "react-native";
 
 import LogoutModal from "@/components/LogoutModal";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { StaleDataBanner } from "@/components/StaleDataBanner";
+import { OfflineBanner } from "@/components/OfflineBanner";
 
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -28,60 +29,35 @@ import {
   UserRound,
 } from "lucide-react-native";
 
+import { useOfflineProfile } from "@/hooks/useOfflineProfile";
+import { useAuth } from "@/context/AuthContext";
+
 export function Profile() {
-  // Hiển thị modal logout
+  const { signOut, user } = useAuth();
+  const { profile, isStale, lastUpdated, isLoading } = useOfflineProfile();
   const [showLogout, setShowLogout] = useState(false);
 
-  // Thông tin người dùng
-  const [profile, setProfile] = useState({
-    fullName: "Thunee0411",
-    email: "you@examplemail.com",
-    age: "21",
-    gender: "Male",
-    height: "175",
-    weight: "65",
-    goalWeight: "60",
-  });
-
-  // Load profile từ AsyncStorage
-  const loadProfile = async () => {
-    try {
-      const saved = await AsyncStorage.getItem("profile");
-
-      if (!saved) return;
-
-      const data = JSON.parse(saved);
-
-      setProfile({
-        fullName: data.fullName || "Thunee0411",
-
-        email: data.email || "you@examplemail.com",
-
-        age: data.age || "21",
-
-        gender: data.gender || "Male",
-
-        height: data.height || "175",
-
-        weight: data.weight || "65",
-
-        goalWeight: data.goalWeight || "60",
-      });
-    } catch (error) {
-      console.log("Load profile error:", error);
-    }
+  const displayProfile = {
+    fullName: profile?.fullName || user?.display_name || "—",
+    email: profile?.email || user?.email || "—",
+    age: profile?.age || "—",
+    gender: profile?.gender || "—",
+    height: profile?.height || "—",
+    weight: profile?.weight || "—",
+    goalWeight: profile?.goalWeight || "—",
+    photoUrl: profile?.photoUrl || user?.photo_url,
   };
-
-  // Mỗi lần quay lại màn Profile sẽ load dữ liệu mới nhất
-  useFocusEffect(
-    useCallback(() => {
-      loadProfile();
-    }, []),
-  );
 
   return (
     <SafeAreaView style={styles.container}>
+      <OfflineBanner pushContent />
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Stale data banner khi offline */}
+        {isStale && (
+          <View style={{ paddingHorizontal: 0, paddingTop: 8 }}>
+            <StaleDataBanner lastUpdated={lastUpdated} />
+          </View>
+        )}
         {/* Header */}
         <View>
           <Text style={styles.title}>My Profile</Text>
@@ -93,14 +69,14 @@ export function Profile() {
         <View style={styles.profileSection}>
           <Image
             source={{
-              uri: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300",
+              uri: displayProfile.photoUrl ?? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300",
             }}
             style={styles.avatar}
           />
 
-          <Text style={styles.name}>{profile.fullName}</Text>
+          <Text style={styles.name}>{displayProfile.fullName}</Text>
 
-          <Text style={styles.email}>{profile.email}</Text>
+          <Text style={styles.email}>{displayProfile.email}</Text>
         </View>
 
         {/* Goal Card */}
@@ -116,7 +92,7 @@ export function Profile() {
               <Text style={styles.goalTitle}>Personal Goal</Text>
 
               <Text style={styles.goalDesc}>
-                Target Weight: {profile.goalWeight} kg
+                Target Weight: {displayProfile.goalWeight} kg
               </Text>
             </View>
 
@@ -167,10 +143,9 @@ export function Profile() {
         <LogoutModal
           visible={showLogout}
           onClose={() => setShowLogout(false)}
-          onLogout={() => {
+          onLogout={async () => {
             setShowLogout(false);
-
-            router.replace("/auth");
+            await signOut();
           }}
         />
       </ScrollView>
