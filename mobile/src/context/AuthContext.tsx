@@ -8,6 +8,7 @@
  *  - Silent token refresh (spec §2.7)
  *  - Force sign-out do auth failure (spec §2.9)
  *  - Manual sign-out (spec §2.10)
+ *  - Offline: xóa SQLite data + AsyncStorage cache khi sign-out (spec §3)
  */
 
 import React, {
@@ -32,6 +33,8 @@ import {
   saveTokens,
 } from "@/lib/tokenStorage";
 import { API_BASE_URL, TOKEN_REFRESH_THRESHOLD_SECONDS } from "@/lib/constants";
+import { clearUserData } from "@/lib/db";
+import { clearProfileCache } from "@/hooks/useOfflineProfile";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,11 +104,12 @@ function parseJwtExp(token: string): number | null {
   try {
     const base64 = token.split(".")[1];
     if (!base64) return null;
-    // atob không có sẵn trên RN — dùng Buffer hoặc manual decode
-    const decoded =
-      typeof atob === "function"
-        ? atob(base64)
-        : Buffer.from(base64, "base64").toString("utf8");
+    // Pad base64 string to a multiple of 4
+    const padded = base64.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = padded.length % 4;
+    const paddedStr = pad ? padded + "===".slice(0, 4 - pad) : padded;
+    // atob is available globally in React Native Hermes and web
+    const decoded = atob(paddedStr);
     const payload = JSON.parse(decoded) as { exp?: number };
     return payload.exp ?? null;
   } catch {
@@ -167,7 +171,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Force sign-out (spec §2.9) ────────────────────────────────────────────
   const forceSignOut = useCallback(async () => {
+    // Xóa token và profile cache
+    const currentUser = user;
     await clearTokens();
+    await clearProfileCache().catch(() => {});
+    // Xóa SQLite data nếu biết userId
+    if (currentUser?.id) {
+      await clearUserData(currentUser.id).catch(() => {});
+    }
     setUser(null);
     // Spec: hiển thị thông báo phiên hết hạn
     router.replace("/auth");
@@ -178,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         [{ text: "OK" }]
       );
     }, 500);
-  }, []);
+  }, [user]);
 
   // Đăng ký callback cho apiClient để gọi khi refresh thất bại
   useEffect(() => {
@@ -313,9 +324,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Manual Sign-Out (spec §2.10) ──────────────────────────────────────────
   const signOut = useCallback(async () => {
-    // TODO spec §2.10: kiểm tra sync_queue pending items trước khi sign out
-    // (sẽ implement sau khi SQLite layer được build)
-
+    const currentUser = user;
     const refreshToken = await getRefreshToken();
     const appToken = await getAppToken();
 
@@ -333,8 +342,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    // Xóa toàn bộ data local (stub — SQLite sẽ implement sau)
-    // await clearLocalDatabase();
+    // Xóa toàn bộ SQLite data của user
+    if (currentUser?.id) {
+      await clearUserData(currentUser.id).catch(() => {});
+    }
+
+    // Xóa AsyncStorage profile cache
+    await clearProfileCache().catch(() => {});
 
     // Sign out Google (cục bộ)
     await googleSignOutLocal();
@@ -344,7 +358,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
 
     router.replace("/auth");
-  }, []);
+  }, [user]);
 
   const value: AuthContextValue = {
     user,
