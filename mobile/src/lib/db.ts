@@ -18,9 +18,10 @@ const SCHEMA_VERSION = 1;
 
 let _db: SQLite.SQLiteDatabase | null = null;
 
-/** Lấy (hoặc mở) database singleton */
+/** Lấy hoặc mở database singleton */
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (_db) return _db;
+
   _db = await SQLite.openDatabaseAsync(DB_NAME);
   return _db;
 }
@@ -29,25 +30,25 @@ export async function getDb(): Promise<SQLite.SQLiteDatabase> {
 export async function initDatabase(): Promise<void> {
   const db = await getDb();
 
-  await db.withTransactionAsync(async () => {
-    // Bật WAL mode cho performance
-    await db.execAsync("PRAGMA journal_mode = WAL;");
-    await db.execAsync("PRAGMA foreign_keys = ON;");
+  /**
+   * Không bật WAL mode ở đây.
+   * expo-sqlite có thể lỗi nếu chạy PRAGMA journal_mode = WAL trong transaction.
+   * Task hiện tại không cần WAL, nên bỏ để app init ổn định.
+   */
+  await db.execAsync("PRAGMA foreign_keys = ON;");
 
-    // Đọc version hiện tại
-    const result = await db.getFirstAsync<{ user_version: number }>(
-      "PRAGMA user_version;"
-    );
-    const currentVersion = result?.user_version ?? 0;
+  const result = await db.getFirstAsync<{ user_version: number }>(
+    "PRAGMA user_version;"
+  );
 
-    if (currentVersion < 1) {
-      await _migrate_v1(db);
-    }
-  });
+  const currentVersion = result?.user_version ?? 0;
+
+  if (currentVersion < 1) {
+    await migrateV1(db);
+  }
 }
 
-async function _migrate_v1(db: SQLite.SQLiteDatabase): Promise<void> {
-  // ── meal_entries ──────────────────────────────────────────────────────────
+async function migrateV1(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS meal_entries (
       id          TEXT    PRIMARY KEY,
@@ -65,7 +66,6 @@ async function _migrate_v1(db: SQLite.SQLiteDatabase): Promise<void> {
     );
   `);
 
-  // ── water_logs ────────────────────────────────────────────────────────────
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS water_logs (
       id          TEXT    PRIMARY KEY,
@@ -78,7 +78,6 @@ async function _migrate_v1(db: SQLite.SQLiteDatabase): Promise<void> {
     );
   `);
 
-  // ── weight_logs ───────────────────────────────────────────────────────────
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS weight_logs (
       id          TEXT    PRIMARY KEY,
@@ -92,7 +91,6 @@ async function _migrate_v1(db: SQLite.SQLiteDatabase): Promise<void> {
     );
   `);
 
-  // ── sync_queue ────────────────────────────────────────────────────────────
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS sync_queue (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,27 +105,29 @@ async function _migrate_v1(db: SQLite.SQLiteDatabase): Promise<void> {
     );
   `);
 
-  // Indexes
   await db.execAsync(
     "CREATE INDEX IF NOT EXISTS idx_meal_user_date ON meal_entries(user_id, logged_at);"
   );
+
   await db.execAsync(
     "CREATE INDEX IF NOT EXISTS idx_water_user_date ON water_logs(user_id, logged_at);"
   );
+
   await db.execAsync(
     "CREATE INDEX IF NOT EXISTS idx_weight_user_date ON weight_logs(user_id, logged_at);"
   );
+
   await db.execAsync(
     "CREATE INDEX IF NOT EXISTS idx_sync_status ON sync_queue(status);"
   );
 
-  // Bump version
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
 }
 
-/** Xóa toàn bộ data của user (gọi khi sign-out) */
+/** Xóa toàn bộ data của user, gọi khi sign-out */
 export async function clearUserData(userId: number): Promise<void> {
   const db = await getDb();
+
   await db.withTransactionAsync(async () => {
     await db.runAsync("DELETE FROM meal_entries WHERE user_id = ?;", [userId]);
     await db.runAsync("DELETE FROM water_logs WHERE user_id = ?;", [userId]);
@@ -136,11 +136,12 @@ export async function clearUserData(userId: number): Promise<void> {
   });
 }
 
-/** Tạo UUID v4 đơn giản (không cần thư viện) */
+/** Tạo UUID v4 đơn giản, không cần thư viện */
 export function generateUUID(): string {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === "x" ? r : (r & 0x3) | 0x8;
+
     return v.toString(16);
   });
 }
