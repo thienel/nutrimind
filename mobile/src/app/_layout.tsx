@@ -1,8 +1,25 @@
-import { Stack } from "expo-router";
-import { SQLiteProvider } from "expo-sqlite";
-import { DatabaseManager, DB_NAME } from "../db/database";
 import { Suspense } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { Stack } from "expo-router";
+import { SQLiteProvider } from "expo-sqlite";
+
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { NetworkProvider } from "@/context/NetworkContext";
+import { DatabaseManager, DB_NAME } from "../db/database";
+
+function AppWithProviders() {
+  const { user } = useAuth();
+
+  return (
+    <NetworkProvider userId={user?.id ?? null}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      />
+    </NetworkProvider>
+  );
+}
 
 export default function Layout() {
   return (
@@ -18,11 +35,9 @@ export default function Layout() {
         onInit={DatabaseManager.initialize}
         useSuspense
       >
-        <Stack
-          screenOptions={{
-            headerShown: false,
-          }}
-        />
+        <AuthProvider>
+          <AppWithProviders />
+        </AuthProvider>
       </SQLiteProvider>
     </Suspense>
   );
