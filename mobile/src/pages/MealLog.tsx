@@ -1,15 +1,13 @@
 /**
- * Meal History screen — grouped meal history by date.
+ * Meal History screen.
  *
- * Sprint 3:
- * - Group meals by Breakfast / Lunch / Dinner / Snack
- * - Date navigation
- * - Daily calorie total
- * - Swipe-to-delete with undo toast
- * - Optimistic UI update
+ * Important:
+ * - This file is Meal History, not Log Meal input.
+ * - Delete is immediate so Home calories update right away.
+ * - Undo restores the deleted meal by inserting it again.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -19,56 +17,56 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { Swipeable } from "react-native-gesture-handler";
 import {
-  Apple,
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Coffee,
-  Moon,
-  Pizza,
   Trash2,
 } from "lucide-react-native";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useAuth } from "@/context/AuthContext";
-import { useMealLog } from "@/hooks/useMealLog";
-import { MealEntry, MealType } from "@/lib/repositories/mealRepository";
+import {
+  deleteMeal,
+  getMealsByDate,
+  insertMeal,
+  MealEntry,
+  MealType,
+} from "@/lib/repositories/mealRepository";
 
 type MealGroupKey = "breakfast" | "lunch" | "dinner" | "snack";
 
 type MealGroupConfig = {
   key: MealGroupKey;
   label: string;
+  icon: string;
   mealTypes: MealType[];
-  icon: React.ReactNode;
 };
 
 const MEAL_GROUPS: MealGroupConfig[] = [
   {
     key: "breakfast",
     label: "Breakfast",
+    icon: "☕",
     mealTypes: ["breakfast"],
-    icon: <Coffee size={15} color="#10B981" />,
   },
   {
     key: "lunch",
     label: "Lunch",
+    icon: "🥗",
     mealTypes: ["lunch"],
-    icon: <Pizza size={15} color="#10B981" />,
   },
   {
     key: "dinner",
     label: "Dinner",
+    icon: "🌙",
     mealTypes: ["dinner"],
-    icon: <Moon size={15} color="#10B981" />,
   },
   {
     key: "snack",
     label: "Snack",
+    icon: "🍏",
     mealTypes: ["snack", "other"],
-    icon: <Apple size={15} color="#10B981" />,
   },
 ];
 
@@ -109,101 +107,144 @@ function formatDateCaption(dateKey: string, today: string) {
   });
 }
 
+function safeUserId(value: unknown) {
+  const parsed = Number(value);
+
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  return 1;
+}
+
 export function MealLog() {
   const { user } = useAuth();
 
   const today = formatDateKey(new Date());
+  const userId = safeUserId(user?.id);
+
   const [selectedDate, setSelectedDate] = useState(today);
+  const [meals, setMeals] = useState<MealEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [undoMeal, setUndoMeal] = useState<MealEntry | null>(null);
 
-  const { meals, isLoading, removeMeal } = useMealLog(
-    user?.id ?? null,
-    selectedDate
-  );
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [hiddenMealIds, setHiddenMealIds] = useState<string[]>([]);
-  const [undoMeal, setUndoMeal] = useState<{ id: string; name: string } | null>(
-    null
-  );
-
-  const undoTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const loadMeals = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const loadedMeals = await getMealsByDate(userId, selectedDate);
+      setMeals(loadedMeals);
+    } catch (error) {
+      console.error("[MealLog] load meals failed:", error);
+      setMeals([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedDate, userId]);
 
   useEffect(() => {
-    setHiddenMealIds([]);
+    loadMeals();
+  }, [loadMeals]);
+
+  useEffect(() => {
     setUndoMeal(null);
+
+    if (undoTimer.current) {
+      clearTimeout(undoTimer.current);
+      undoTimer.current = null;
+    }
   }, [selectedDate]);
 
   useEffect(() => {
     return () => {
-      Object.values(undoTimers.current).forEach(clearTimeout);
+      if (undoTimer.current) {
+        clearTimeout(undoTimer.current);
+      }
     };
   }, []);
 
-  const visibleMeals = useMemo(
-    () => meals.filter((meal) => !hiddenMealIds.includes(meal.id)),
-    [meals, hiddenMealIds]
-  );
-
   const totalCalories = useMemo(
-    () => visibleMeals.reduce((sum, meal) => sum + meal.calories, 0),
-    [visibleMeals]
+    () => meals.reduce((sum, meal) => sum + meal.calories, 0),
+    [meals]
   );
 
   const groupedMeals = useMemo(
     () =>
       MEAL_GROUPS.map((group) => {
-        const groupMeals = visibleMeals.filter((meal) =>
+        const groupMeals = meals.filter((meal) =>
           group.mealTypes.includes(meal.meal_type)
         );
 
         return {
           ...group,
           meals: groupMeals,
-          totalCalories: groupMeals.reduce(
-            (sum, meal) => sum + meal.calories,
-            0
-          ),
         };
       }),
-    [visibleMeals]
+    [meals]
   );
 
   const selectedDateCaption = formatDateCaption(selectedDate, today);
   const selectedDateText = formatDisplayDate(selectedDate);
   const canGoNext = selectedDate < today;
 
-  const handleDelete = (id: string, mealName: string) => {
-    setHiddenMealIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    setUndoMeal({ id, name: mealName });
-
-    if (undoTimers.current[id]) {
-      clearTimeout(undoTimers.current[id]);
+  async function handleDelete(meal: MealEntry) {
+    if (undoTimer.current) {
+      clearTimeout(undoTimer.current);
+      undoTimer.current = null;
     }
 
-    undoTimers.current[id] = setTimeout(async () => {
-      try {
-        await removeMeal(id);
-      } catch (error) {
-        console.error("[MealLog] delete failed:", error);
-        setHiddenMealIds((prev) => prev.filter((mealId) => mealId !== id));
-      } finally {
-        delete undoTimers.current[id];
+    const beforeDelete = meals;
 
-        setUndoMeal((current) => (current?.id === id ? null : current));
-      }
+    setUndoMeal(meal);
+    setMeals((currentMeals) =>
+      currentMeals.filter((currentMeal) => currentMeal.id !== meal.id)
+    );
+
+    try {
+      await deleteMeal(meal.id, userId);
+    } catch (error) {
+      console.error("[MealLog] delete failed:", error);
+      setMeals(beforeDelete);
+      setUndoMeal(null);
+      return;
+    }
+
+    undoTimer.current = setTimeout(() => {
+      setUndoMeal(null);
+      undoTimer.current = null;
     }, 3500);
-  };
+  }
 
-  const handleUndoDelete = () => {
+  async function handleUndoDelete() {
     if (!undoMeal) return;
 
-    if (undoTimers.current[undoMeal.id]) {
-      clearTimeout(undoTimers.current[undoMeal.id]);
-      delete undoTimers.current[undoMeal.id];
+    const mealToRestore = undoMeal;
+
+    if (undoTimer.current) {
+      clearTimeout(undoTimer.current);
+      undoTimer.current = null;
     }
 
-    setHiddenMealIds((prev) => prev.filter((id) => id !== undoMeal.id));
     setUndoMeal(null);
-  };
+
+    try {
+      await insertMeal({
+        userId,
+        name: mealToRestore.name,
+        calories: mealToRestore.calories,
+        proteinG: mealToRestore.protein_g,
+        carbsG: mealToRestore.carbs_g,
+        fatG: mealToRestore.fat_g,
+        mealType: mealToRestore.meal_type,
+        loggedAt: mealToRestore.logged_at,
+      });
+
+      await loadMeals();
+    } catch (error) {
+      console.error("[MealLog] undo delete failed:", error);
+    }
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -267,7 +308,7 @@ export function MealLog() {
         </View>
       </ScrollView>
 
-      {undoMeal && (
+      {undoMeal ? (
         <View style={styles.undoToast}>
           <Text style={styles.undoText} numberOfLines={1}>
             Deleted “{undoMeal.name}”
@@ -277,7 +318,7 @@ export function MealLog() {
             <Text style={styles.undoAction}>Undo</Text>
           </Pressable>
         </View>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -290,15 +331,17 @@ function MealGroup({
   onDelete,
 }: {
   label: string;
-  icon: React.ReactNode;
+  icon: string;
   meals: MealEntry[];
   isLoading: boolean;
-  onDelete: (id: string, mealName: string) => void;
+  onDelete: (meal: MealEntry) => void;
 }) {
   return (
     <View style={styles.group}>
       <View style={styles.groupHeader}>
-        <View style={styles.groupIcon}>{icon}</View>
+        <View style={styles.groupIcon}>
+          <Text style={styles.groupIconText}>{icon}</Text>
+        </View>
         <Text style={styles.groupTitle}>{label}</Text>
       </View>
 
@@ -307,9 +350,8 @@ function MealGroup({
           {meals.map((meal) => (
             <MealItem
               key={meal.id}
-              name={meal.name}
-              calories={meal.calories}
-              onDelete={() => onDelete(meal.id, meal.name)}
+              meal={meal}
+              onDelete={() => onDelete(meal)}
             />
           ))}
         </View>
@@ -325,37 +367,27 @@ function MealGroup({
 }
 
 function MealItem({
-  name,
-  calories,
+  meal,
   onDelete,
 }: {
-  name: string;
-  calories: number;
+  meal: MealEntry;
   onDelete: () => void;
 }) {
   return (
-    <Swipeable
-      overshootRight={false}
-      renderRightActions={() => (
-        <Pressable style={styles.swipeDelete} onPress={onDelete}>
-          <Trash2 size={18} color="#fff" />
-          <Text style={styles.swipeDeleteText}>Delete</Text>
-        </Pressable>
-      )}
-    >
-      <View style={styles.mealItem}>
-        <View style={styles.mealInfo}>
-          <Text style={styles.mealName} numberOfLines={1}>
-            {name}
-          </Text>
-          <Text style={styles.mealCalories}>{Math.round(calories)} kcal</Text>
-        </View>
-
-        <Pressable onPress={onDelete} style={styles.deleteBtn} hitSlop={8}>
-          <Trash2 size={16} color="#EF4444" />
-        </Pressable>
+    <View style={styles.mealItem}>
+      <View style={styles.mealInfo}>
+        <Text style={styles.mealName} numberOfLines={1}>
+          {meal.name}
+        </Text>
+        <Text style={styles.mealCalories}>
+          {Math.round(meal.calories)} kcal
+        </Text>
       </View>
-    </Swipeable>
+
+      <Pressable onPress={onDelete} style={styles.deleteBtn} hitSlop={8}>
+        <Trash2 size={16} color="#EF4444" />
+      </Pressable>
+    </View>
   );
 }
 
@@ -364,24 +396,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F7F9F8",
   },
-
   scrollView: {
     flex: 1,
   },
-
   scroll: {
     paddingHorizontal: 22,
     paddingTop: 8,
     paddingBottom: 130,
   },
-
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
     marginBottom: 24,
   },
-
   backBtn: {
     width: 42,
     height: 42,
@@ -395,20 +423,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-
   title: {
     fontSize: 22,
     fontWeight: "900",
     color: "#071426",
   },
-
   subtitle: {
     fontSize: 13,
     color: "#94A3B8",
     marginTop: 3,
     fontWeight: "500",
   },
-
   dateCard: {
     height: 72,
     borderRadius: 22,
@@ -424,7 +449,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 3,
   },
-
   dateBtn: {
     width: 38,
     height: 38,
@@ -433,28 +457,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   dateBtnDisabled: {
     backgroundColor: "#F8FAFC",
   },
-
   dateCenter: {
     alignItems: "center",
   },
-
   dateCaption: {
     fontSize: 12,
     color: "#94A3B8",
     fontWeight: "700",
     marginBottom: 3,
   },
-
   dateTitle: {
     fontSize: 16,
     color: "#071426",
     fontWeight: "900",
   },
-
   totalCard: {
     minHeight: 126,
     borderRadius: 24,
@@ -464,42 +483,35 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     justifyContent: "center",
   },
-
   totalLabel: {
     fontSize: 13,
     color: "#EFFFFB",
     fontWeight: "700",
     marginBottom: 10,
   },
-
   totalValue: {
     fontSize: 38,
     lineHeight: 42,
     color: "#FFFFFF",
     fontWeight: "900",
   },
-
   totalUnit: {
     fontSize: 14,
     color: "#EFFFFB",
     fontWeight: "600",
     marginTop: 4,
   },
-
   groupsWrap: {
     gap: 20,
   },
-
   group: {
     gap: 10,
   },
-
   groupHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-
   groupIcon: {
     width: 28,
     height: 28,
@@ -508,17 +520,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
+  groupIconText: {
+    fontSize: 13,
+  },
   groupTitle: {
     fontSize: 19,
     color: "#071426",
     fontWeight: "900",
   },
-
   groupList: {
     gap: 10,
   },
-
   mealItem: {
     minHeight: 72,
     borderRadius: 20,
@@ -535,25 +547,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-
   mealInfo: {
     flex: 1,
     paddingRight: 12,
   },
-
   mealName: {
     fontSize: 15,
     color: "#071426",
     fontWeight: "900",
     marginBottom: 4,
   },
-
   mealCalories: {
     fontSize: 13,
     color: "#94A3B8",
     fontWeight: "700",
   },
-
   deleteBtn: {
     width: 38,
     height: 38,
@@ -562,24 +570,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
-  swipeDelete: {
-    width: 88,
-    minHeight: 72,
-    borderRadius: 20,
-    backgroundColor: "#EF4444",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    marginLeft: 10,
-  },
-
-  swipeDeleteText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "800",
-  },
-
   emptyMealBox: {
     minHeight: 58,
     borderRadius: 18,
@@ -590,13 +580,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   emptyMealText: {
     fontSize: 13,
     color: "#94A3B8",
     fontWeight: "700",
   },
-
   undoToast: {
     position: "absolute",
     left: 22,
@@ -616,14 +604,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 5,
   },
-
   undoText: {
     flex: 1,
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
   },
-
   undoAction: {
     color: "#10CDBA",
     fontSize: 13,
