@@ -1,15 +1,3 @@
-/**
- * AuthContext — trung tâm quản lý authentication
- *
- * Bao gồm:
- *  - Startup check (spec §2.6)
- *  - Email register / login (spec §2.3, §2.4)
- *  - Google Sign-In (spec §2.5)
- *  - Silent token refresh (spec §2.7)
- *  - Force sign-out do auth failure (spec §2.9)
- *  - Manual sign-out (spec §2.10)
- *  - Offline: xóa SQLite data + AsyncStorage cache khi sign-out (spec §3)
- */
 
 import React, {
   createContext,
@@ -174,10 +162,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Xóa token và profile cache
     const currentUser = user;
     await clearTokens();
-    await clearProfileCache().catch(() => {});
+    await clearProfileCache().catch(() => { });
     // Xóa SQLite data nếu biết userId
     if (currentUser?.id) {
-      await clearUserData(currentUser.id).catch(() => {});
+      await clearUserData(currentUser.id).catch(() => { });
     }
     setUser(null);
     // Spec: hiển thị thông báo phiên hết hạn
@@ -344,11 +332,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Xóa toàn bộ SQLite data của user
     if (currentUser?.id) {
-      await clearUserData(currentUser.id).catch(() => {});
+      await clearUserData(currentUser.id).catch(() => { });
     }
 
     // Xóa AsyncStorage profile cache
-    await clearProfileCache().catch(() => {});
+    await clearProfileCache().catch(() => { });
 
     // Sign out Google (cục bộ)
     await googleSignOutLocal();

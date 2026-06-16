@@ -30,16 +30,16 @@ export async function getDb(): Promise<SQLite.SQLiteDatabase> {
 export async function initDatabase(): Promise<void> {
   const db = await getDb();
 
-  /**
-   * Không bật WAL mode ở đây.
-   * expo-sqlite có thể lỗi nếu chạy PRAGMA journal_mode = WAL trong transaction.
-   * Task hiện tại không cần WAL, nên bỏ để app init ổn định.
-   */
+  // PRAGMAs that change journal_mode must run OUTSIDE a transaction
+  await db.execAsync("PRAGMA journal_mode = WAL;");
   await db.execAsync("PRAGMA foreign_keys = ON;");
 
-  const result = await db.getFirstAsync<{ user_version: number }>(
-    "PRAGMA user_version;"
-  );
+  await db.withTransactionAsync(async () => {
+    // Đọc version hiện tại
+    const result = await db.getFirstAsync<{ user_version: number }>(
+      "PRAGMA user_version;"
+    );
+    const currentVersion = result?.user_version ?? 0;
 
   const currentVersion = result?.user_version ?? 0;
 

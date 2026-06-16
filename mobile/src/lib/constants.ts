@@ -1,11 +1,3 @@
-/**
- * App-wide constants — đọc từ biến môi trường (.env)
- *
- * Expo tự load file .env. Biến phải có prefix EXPO_PUBLIC_ để được bundle vào app.
- * Cách đặt giá trị: chỉnh file .env ở root của mobile/ (không cần restart bundler).
- *
- * Xem .env.example để biết các biến cần thiết.
- */
 
 /** Base URL của NutriMind backend API (không có trailing slash) */
 export const API_BASE_URL =
