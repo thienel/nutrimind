@@ -29,11 +29,11 @@ export async function getDb(): Promise<SQLite.SQLiteDatabase> {
 export async function initDatabase(): Promise<void> {
   const db = await getDb();
 
-  await db.withTransactionAsync(async () => {
-    // Bật WAL mode cho performance
-    await db.execAsync("PRAGMA journal_mode = WAL;");
-    await db.execAsync("PRAGMA foreign_keys = ON;");
+  // PRAGMAs that change journal_mode must run OUTSIDE a transaction
+  await db.execAsync("PRAGMA journal_mode = WAL;");
+  await db.execAsync("PRAGMA foreign_keys = ON;");
 
+  await db.withTransactionAsync(async () => {
     // Đọc version hiện tại
     const result = await db.getFirstAsync<{ user_version: number }>(
       "PRAGMA user_version;"

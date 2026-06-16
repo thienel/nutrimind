@@ -9,10 +9,12 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.nutrimind.app",
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.nutrimind.app",
+      "googleServicesFile": "./android/app/google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -37,9 +39,16 @@
           }
         }
       ],
-      "@react-native-google-signin/google-signin",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.554505712919-q2fa9c9hhff9c1r6t700lmb0boj5p9g2"
+        }
+      ],
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-font",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,
