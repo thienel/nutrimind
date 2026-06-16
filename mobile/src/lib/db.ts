@@ -41,11 +41,10 @@ export async function initDatabase(): Promise<void> {
     );
     const currentVersion = result?.user_version ?? 0;
 
-  const currentVersion = result?.user_version ?? 0;
-
-  if (currentVersion < 1) {
-    await migrateV1(db);
-  }
+    if (currentVersion < 1) {
+      await migrateV1(db);
+    }
+  });
 }
 
 async function migrateV1(db: SQLite.SQLiteDatabase): Promise<void> {
