@@ -1,20 +1,71 @@
-import React, { type ReactNode } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Tabs, router } from "expo-router";
 import { Bot, ChartColumn, House, Plus, UserRound } from "lucide-react-native";
 
-const TAB_BADGES = {
-  home: 0,
-  progress: 0,
-  coach: 1,
-  profile: 0,
-};
+const AI_COACH_LAST_SEEN_DATE_KEY = "nutrimind_ai_coach_last_seen_date";
+
+function getTodayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function TabsLayout() {
+  const [coachHasUnread, setCoachHasUnread] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadCoachBadgeState() {
+      try {
+        const lastSeenDate = await AsyncStorage.getItem(
+          AI_COACH_LAST_SEEN_DATE_KEY
+        );
+
+        if (!isActive) return;
+
+        setCoachHasUnread(lastSeenDate !== getTodayKey());
+      } catch (error) {
+        console.warn("[TabsLayout] Failed to load AI Coach badge state:", error);
+
+        if (!isActive) return;
+
+        setCoachHasUnread(true);
+      }
+    }
+
+    loadCoachBadgeState();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const markCoachAsSeen = useCallback(async () => {
+    try {
+      setCoachHasUnread(false);
+
+      await AsyncStorage.setItem(AI_COACH_LAST_SEEN_DATE_KEY, getTodayKey());
+    } catch (error) {
+      console.warn("[TabsLayout] Failed to save AI Coach seen state:", error);
+    }
+  }, []);
+
   return (
     <View style={styles.root}>
       <Tabs
-        tabBar={(props) => <CustomTabBar {...props} />}
+        tabBar={(props) => (
+          <CustomTabBar
+            {...props}
+            coachHasUnread={coachHasUnread}
+            onCoachSeen={markCoachAsSeen}
+          />
+        )}
         screenOptions={{
           headerShown: false,
         }}
@@ -23,11 +74,7 @@ export default function TabsLayout() {
           name="home"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon
-                active={focused}
-                label="Home"
-                badgeCount={TAB_BADGES.home}
-              >
+              <TabIcon active={focused} label="Home" badgeVisible={false}>
                 <House
                   size={22}
                   color={focused ? "#10B981" : "#94A3B8"}
@@ -42,11 +89,7 @@ export default function TabsLayout() {
           name="progress"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon
-                active={focused}
-                label="Progress"
-                badgeCount={TAB_BADGES.progress}
-              >
+              <TabIcon active={focused} label="Progress" badgeVisible={false}>
                 <ChartColumn
                   size={22}
                   color={focused ? "#10B981" : "#94A3B8"}
@@ -64,7 +107,7 @@ export default function TabsLayout() {
               <TabIcon
                 active={focused}
                 label="AI Coach"
-                badgeCount={TAB_BADGES.coach}
+                badgeVisible={coachHasUnread && !focused}
               >
                 <Bot
                   size={22}
@@ -80,11 +123,7 @@ export default function TabsLayout() {
           name="profile"
           options={{
             tabBarIcon: ({ focused }) => (
-              <TabIcon
-                active={focused}
-                label="Profile"
-                badgeCount={TAB_BADGES.profile}
-              >
+              <TabIcon active={focused} label="Profile" badgeVisible={false}>
                 <UserRound
                   size={22}
                   color={focused ? "#10B981" : "#94A3B8"}
@@ -106,7 +145,21 @@ export default function TabsLayout() {
   );
 }
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
+function CustomTabBar({
+  state,
+  descriptors,
+  navigation,
+  coachHasUnread,
+  onCoachSeen,
+}: any) {
+  const activeRouteName = state.routes[state.index]?.name;
+
+  useEffect(() => {
+    if (activeRouteName === "coach") {
+      onCoachSeen();
+    }
+  }, [activeRouteName, onCoachSeen]);
+
   const renderTab = (index: number) => {
     const route = state.routes[index];
     if (!route) return null;
@@ -121,6 +174,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         canPreventDefault: true,
       });
 
+      if (route.name === "coach") {
+        onCoachSeen();
+      }
+
       if (!isFocused && !event.defaultPrevented) {
         navigation.navigate(route.name, route.params);
       }
@@ -134,7 +191,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     };
 
     const icon = options.tabBarIcon
-      ? options.tabBarIcon({ focused: isFocused })
+      ? options.tabBarIcon({
+          focused: isFocused,
+          coachHasUnread,
+        })
       : null;
 
     return (
@@ -163,12 +223,12 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 function TabIcon({
   active,
   label,
-  badgeCount,
+  badgeVisible,
   children,
 }: {
   active: boolean;
   label: string;
-  badgeCount: number;
+  badgeVisible: boolean;
   children: ReactNode;
 }) {
   return (
@@ -176,11 +236,7 @@ function TabIcon({
       <View style={[styles.iconWrap, active && styles.activeIconWrap]}>
         {children}
 
-        {badgeCount > 0 ? (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{badgeCount}</Text>
-          </View>
-        ) : null}
+        {badgeVisible ? <View style={styles.badge} /> : null}
       </View>
 
       <Text style={[styles.tabLabel, active && styles.activeTabLabel]}>
@@ -257,23 +313,14 @@ const styles = StyleSheet.create({
 
   badge: {
     position: "absolute",
-    top: -3,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    top: 4,
+    right: 5,
+    width: 9,
+    height: 9,
+    borderRadius: 999,
     backgroundColor: "#EF4444",
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-
-  badgeText: {
-    color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "900",
   },
 
   centerButton: {
