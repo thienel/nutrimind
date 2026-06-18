@@ -22,6 +22,7 @@ export interface CachedProfile {
   weight: string;
   goalWeight: string;
   photoUrl?: string;
+  waterTargetMl?: number;
 }
 
 interface UseOfflineProfileReturn {
@@ -88,25 +89,27 @@ export function useOfflineProfile(): UseOfflineProfileReturn {
     try {
       // Gọi API lấy profile
       const serverProfile = await api.get<{
-        full_name?: string;
+        display_name?: string;
         email?: string;
         age?: number;
         gender?: string;
         height_cm?: number;
-        current_weight_kg?: number;
-        target_weight_kg?: number;
-        photo_url?: string;
+        weight_kg?: number;
+        goal?: string;
+        avatar_url?: string;
+        water_target_ml?: number;
       }>("/profile");
 
       const mapped: CachedProfile = {
-        fullName: serverProfile.full_name ?? "",
+        fullName: serverProfile.display_name ?? "",
         email: serverProfile.email ?? "",
         age: serverProfile.age?.toString() ?? "",
         gender: serverProfile.gender ?? "",
         height: serverProfile.height_cm?.toString() ?? "",
-        weight: serverProfile.current_weight_kg?.toString() ?? "",
-        goalWeight: serverProfile.target_weight_kg?.toString() ?? "",
-        photoUrl: serverProfile.photo_url,
+        weight: serverProfile.weight_kg?.toString() ?? "",
+        goalWeight: serverProfile.goal ?? "",
+        photoUrl: serverProfile.avatar_url,
+        waterTargetMl: serverProfile.water_target_ml,
       };
 
       await saveToCache(mapped);

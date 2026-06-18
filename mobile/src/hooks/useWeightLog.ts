@@ -41,15 +41,17 @@ export function useWeightLog(
 
   const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
 
+  const numericUserId = userId ? Number(userId) : null;
+
   useEffect(() => {
-    if (!userId) return;
+    if (!numericUserId) return;
 
     let cancelled = false;
     setIsLoading(true);
 
     Promise.all([
-      getWeightHistory(userId, limit),
-      getLatestWeight(userId),
+      getWeightHistory(numericUserId, limit),
+      getLatestWeight(numericUserId),
     ])
       .then(([logs, latest]) => {
         if (cancelled) return;
@@ -67,13 +69,13 @@ export function useWeightLog(
     return () => {
       cancelled = true;
     };
-  }, [userId, limit, refreshTick]);
+  }, [numericUserId, limit, refreshTick]);
 
   const addWeight = useCallback(
     async (weightKg: number, note?: string): Promise<string | null> => {
-      if (!userId) return null;
+      if (!numericUserId) return null;
       try {
-        const id = await logWeight({ userId, weightKg, note });
+        const id = await logWeight({ userId: numericUserId, weightKg, note });
         refresh();
         return id;
       } catch (e: unknown) {
@@ -82,21 +84,21 @@ export function useWeightLog(
         return null;
       }
     },
-    [userId, refresh]
+    [numericUserId, refresh]
   );
 
   const removeWeight = useCallback(
     async (id: string): Promise<void> => {
-      if (!userId) return;
+      if (!numericUserId) return;
       try {
-        await deleteWeightLog(id, userId);
+        await deleteWeightLog(id, numericUserId);
         refresh();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Lỗi xóa";
         setError(msg);
       }
     },
-    [userId, refresh]
+    [numericUserId, refresh]
   );
 
   return { history, latestWeight, isLoading, error, addWeight, removeWeight, refresh };
@@ -108,12 +110,14 @@ export function useWeightLog(
 export function useWeightChart(userId: number | null, days = 30) {
   const [data, setData] = useState<{ date: string; weight_kg: number }[]>([]);
 
+  const numericUserId = userId ? Number(userId) : null;
+
   useEffect(() => {
-    if (!userId) return;
-    getWeightChartData(userId, days)
+    if (!numericUserId) return;
+    getWeightChartData(numericUserId, days)
       .then(setData)
       .catch(() => setData([]));
-  }, [userId, days]);
+  }, [numericUserId, days]);
 
   return data;
 }

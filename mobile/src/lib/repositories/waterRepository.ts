@@ -31,11 +31,15 @@ export async function logWater(data: InsertWaterData): Promise<string> {
   const db = await getDb();
   const id = generateUUID();
   const loggedAt = data.loggedAt ?? new Date().toISOString();
+  const loggedDate = loggedAt.slice(0, 10);
+  const now = new Date().toISOString();
 
   await db.runAsync(
-    `INSERT INTO water_logs (id, user_id, amount_ml, logged_at)
-     VALUES (?, ?, ?, ?);`,
-    [id, data.userId, data.amountMl, loggedAt]
+    `INSERT INTO local_water_entries (
+      local_id, server_id, user_id, volume_ml, logged_date,
+      client_created_at, sync_status, sync_attempts, last_sync_error, created_at
+    ) VALUES (?, NULL, ?, ?, ?, ?, 'pending', 0, NULL, ?);`,
+    [id, data.userId, data.amountMl, loggedDate, loggedAt, now]
   );
 
   await enqueue("create", "water", id, {
@@ -56,12 +60,22 @@ export async function getWaterByDate(
   date: string
 ): Promise<WaterLog[]> {
   const db = await getDb();
-  return db.getAllAsync<WaterLog>(
-    `SELECT * FROM water_logs
-     WHERE user_id = ? AND date(logged_at) = ? AND is_deleted = 0
-     ORDER BY logged_at ASC;`,
+  const rows = await db.getAllAsync<any>(
+    `SELECT * FROM local_water_entries
+     WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending'
+     ORDER BY client_created_at ASC;`,
     [userId, date]
   );
+
+  return rows.map((r) => ({
+    id: r.local_id,
+    user_id: r.user_id,
+    amount_ml: r.volume_ml,
+    logged_at: r.client_created_at,
+    created_at: r.created_at,
+    is_deleted: r.sync_status === "deleted_pending" ? 1 : 0,
+    server_id: r.server_id ? String(r.server_id) : null,
+  }));
 }
 
 /**
@@ -73,13 +87,23 @@ export async function getWaterHistory(
   offset = 0
 ): Promise<WaterLog[]> {
   const db = await getDb();
-  return db.getAllAsync<WaterLog>(
-    `SELECT * FROM water_logs
-     WHERE user_id = ? AND is_deleted = 0
-     ORDER BY logged_at DESC
+  const rows = await db.getAllAsync<any>(
+    `SELECT * FROM local_water_entries
+     WHERE user_id = ? AND sync_status != 'deleted_pending'
+     ORDER BY client_created_at DESC
      LIMIT ? OFFSET ?;`,
     [userId, limit, offset]
   );
+
+  return rows.map((r) => ({
+    id: r.local_id,
+    user_id: r.user_id,
+    amount_ml: r.volume_ml,
+    logged_at: r.client_created_at,
+    created_at: r.created_at,
+    is_deleted: r.sync_status === "deleted_pending" ? 1 : 0,
+    server_id: r.server_id ? String(r.server_id) : null,
+  }));
 }
 
 /**
@@ -91,9 +115,9 @@ export async function getDailyWaterTotal(
 ): Promise<number> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ total: number }>(
-    `SELECT COALESCE(SUM(amount_ml), 0) as total
-     FROM water_logs
-     WHERE user_id = ? AND date(logged_at) = ? AND is_deleted = 0;`,
+    `SELECT COALESCE(SUM(volume_ml), 0) as total
+     FROM local_water_entries
+     WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending';`,
     [userId, date]
   );
   return row?.total ?? 0;
@@ -108,12 +132,12 @@ export async function getDailyWaterHistory(
 ): Promise<{ date: string; amount_ml: number }[]> {
   const db = await getDb();
   return db.getAllAsync<{ date: string; amount_ml: number }>(
-    `SELECT date(logged_at) as date, COALESCE(SUM(amount_ml), 0) as amount_ml
-     FROM water_logs
+    `SELECT logged_date as date, COALESCE(SUM(volume_ml), 0) as amount_ml
+     FROM local_water_entries
      WHERE user_id = ?
-       AND is_deleted = 0
-       AND logged_at >= datetime('now', ? || ' days')
-     GROUP BY date(logged_at)
+       AND sync_status != 'deleted_pending'
+       AND client_created_at >= datetime('now', ? || ' days')
+     GROUP BY logged_date
      ORDER BY date ASC;`,
     [userId, -days]
   );
@@ -126,8 +150,11 @@ export async function deleteWaterLog(
 ): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE water_logs SET is_deleted = 1 WHERE id = ? AND user_id = ?;`,
+    `UPDATE local_water_entries
+     SET sync_status = 'deleted_pending'
+     WHERE local_id = ? AND user_id = ?;`,
     [id, userId]
   );
   await enqueue("delete", "water", id, { local_id: id });
 }
+

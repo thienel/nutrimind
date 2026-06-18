@@ -14,10 +14,9 @@ export default function TabsLayout() {
   return (
     <View style={styles.root}>
       <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          tabBarShowLabel: false,
-          tabBarStyle: styles.tabBar,
         }}
       >
         <Tabs.Screen
@@ -107,6 +106,60 @@ export default function TabsLayout() {
   );
 }
 
+function CustomTabBar({ state, descriptors, navigation }: any) {
+  const renderTab = (index: number) => {
+    const route = state.routes[index];
+    if (!route) return null;
+
+    const { options } = descriptors[route.key];
+    const isFocused = state.index === index;
+
+    const onPress = () => {
+      const event = navigation.emit({
+        type: "tabPress",
+        target: route.key,
+        canPreventDefault: true,
+      });
+
+      if (!isFocused && !event.defaultPrevented) {
+        navigation.navigate(route.name, route.params);
+      }
+    };
+
+    const onLongPress = () => {
+      navigation.emit({
+        type: "tabLongPress",
+        target: route.key,
+      });
+    };
+
+    const icon = options.tabBarIcon
+      ? options.tabBarIcon({ focused: isFocused })
+      : null;
+
+    return (
+      <Pressable
+        key={route.key}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        style={styles.tabButton}
+      >
+        {icon}
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={styles.tabBar}>
+      {renderTab(0)}
+      {renderTab(1)}
+      <View style={styles.spacer} />
+      {renderTab(2)}
+      {renderTab(3)}
+    </View>
+  );
+}
+
 function TabIcon({
   active,
   label,
@@ -143,16 +196,15 @@ const styles = StyleSheet.create({
   },
 
   tabBar: {
+    flexDirection: "row",
     position: "absolute",
     left: 22,
     right: 22,
     bottom: 18,
     height: 76,
     borderRadius: 34,
-    borderTopWidth: 0,
     backgroundColor: "#FFFFFF",
-    paddingTop: 9,
-    paddingBottom: Platform.OS === "ios" ? 14 : 9,
+    alignItems: "stretch",
     shadowColor: "#0F172A",
     shadowOpacity: 0.1,
     shadowRadius: 18,
@@ -161,6 +213,17 @@ const styles = StyleSheet.create({
       height: 8,
     },
     elevation: 10,
+  },
+
+  tabButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: Platform.OS === "ios" ? 4 : 0,
+  },
+
+  spacer: {
+    flex: 1,
   },
 
   tabItem: {

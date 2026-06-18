@@ -1,5 +1,5 @@
 /**
- * WeightLog screen — log cân nặng (offline-first)
+ * WeightLog screen — log cân nặng (redesigned, offline-first)
  */
 
 import React, { useState } from "react";
@@ -11,396 +11,754 @@ import {
   Text,
   TextInput,
   View,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { ArrowLeft, Scale, TrendingDown, TrendingUp, Minus as TrendMinus, Trash2 } from "lucide-react-native";
+import {
+  ChevronLeft,
+  Scale,
+  TrendingDown,
+  TrendingUp,
+  Minus,
+  Trash2,
+  Plus,
+  X,
+  Sparkles,
+} from "lucide-react-native";
 import { useAuth } from "@/context/AuthContext";
-import { useWeightLog, useWeightChart } from "@/hooks/useWeightLog";
+import { useWeightLog } from "@/hooks/useWeightLog";
+import { useOfflineProfile } from "@/hooks/useOfflineProfile";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { useToast } from "@/components/ToastProvider";
 
 export function WeightLog() {
   const { user } = useAuth();
-  const { history, latestWeight, addWeight, removeWeight, isLoading } =
-    useWeightLog(user?.id ?? null, 20);
-  const chartData = useWeightChart(user?.id ?? null, 14);
+  const { profile } = useOfflineProfile();
+  const { showToast } = useToast();
+  
+  // Fetch logs (limit 50)
+  const { history, latestWeight, addWeight, removeWeight, isLoading, error } =
+    useWeightLog(user?.id ? Number(user.id) : null, 50);
 
+  const [modalVisible, setModalVisible] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [noteInput, setNoteInput] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const handleAdd = async () => {
-    const w = parseFloat(weightInput);
-    if (!w || w < 20 || w > 500) {
-      Alert.alert("Giá trị không hợp lệ", "Nhập cân nặng hợp lệ (20-500 kg)");
+  // Safe history array casting
+  const historyList = Array.isArray(history) ? history : [];
+
+  // Calculations
+  const rawStartW = (historyList && historyList.length > 0 && historyList[historyList.length - 1]) 
+    ? historyList[historyList.length - 1].weight_kg 
+    : (Number(profile?.weight) || 70);
+  const startW = isNaN(rawStartW) || rawStartW <= 0 ? 70 : rawStartW;
+  
+  const rawCurrentW = latestWeight || startW;
+  const currentW = isNaN(rawCurrentW) || rawCurrentW <= 0 ? 70 : rawCurrentW;
+
+  const rawGoalW = Number(profile?.goalWeight) || 65;
+  const goalW = isNaN(rawGoalW) || rawGoalW <= 0 ? 65 : rawGoalW;
+
+  const diff = isNaN(currentW - startW) ? 0 : currentW - startW;
+  const progressText = diff === 0 ? "0 kg" : `${diff > 0 ? "+" : ""}${diff.toFixed(1)} kg`;
+
+  const remaining = isNaN(currentW - goalW) ? 0 : Math.max(0, currentW - goalW);
+  const totalToLose = isNaN(startW - goalW) ? 0 : startW - goalW;
+  const totalToGain = isNaN(goalW - startW) ? 0 : goalW - startW;
+  
+  let rawProgressPct = 0;
+  if (totalToLose > 0) {
+    rawProgressPct = Math.min(100, Math.max(0, ((startW - currentW) / totalToLose) * 100));
+  } else if (totalToGain > 0) {
+    rawProgressPct = Math.min(100, Math.max(0, ((currentW - startW) / totalToGain) * 100));
+  }
+  const progressPct = isNaN(rawProgressPct) ? 0 : rawProgressPct;
+
+  // Trend status
+  const isLossGoal = goalW <= startW;
+  let statusText = "Consistent";
+  let statusColor = "#64748B";
+  let statusBg = "#F1F5F9";
+  let trendIcon = <Minus size={16} color="#64748B" />;
+
+  if (diff < 0) {
+    statusText = isLossGoal ? "Improving" : "Consistent";
+    statusColor = "#10B981";
+    statusBg = "#ECFDF5";
+    trendIcon = <TrendingDown size={16} color="#10B981" />;
+  } else if (diff > 0) {
+    statusText = isLossGoal ? "Gaining Weight" : "Improving";
+    statusColor = isLossGoal ? "#EF4444" : "#10B981";
+    statusBg = isLossGoal ? "#FFF1F2" : "#ECFDF5";
+    trendIcon = <TrendingUp size={16} color={statusColor} />;
+  }
+
+  // Generate 5 bars for the Weight Trend
+  const chartItems = [...historyList].slice(0, 5).reverse();
+  while (chartItems.length < 5) {
+    // Pad chart data with starting/fallback weight so it doesn't look empty
+    const offset = chartItems.length - 2; // small mock deviations
+    chartItems.unshift({
+      id: `mock-${chartItems.length}`,
+      user_id: 0,
+      weight_kg: startW + (offset * 0.4),
+      note: null,
+      logged_at: new Date(Date.now() - (5 - chartItems.length) * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: "",
+      is_deleted: 0,
+      server_id: null,
+    });
+  }
+
+  const chartWeights = chartItems.map((d) => d.weight_kg);
+  const maxW = Math.max(...chartWeights, currentW, startW, goalW);
+  const minW = Math.min(...chartWeights, currentW, startW, goalW);
+  const rangeW = maxW - minW || 1;
+
+  const handleAddWeightLog = async () => {
+    const w = parseFloat(weightInput.replace(",", "."));
+    if (isNaN(w) || w < 20 || w > 500) {
+      Alert.alert("Giá trị không hợp lệ", "Vui lòng nhập cân nặng hợp lệ (20-500 kg)");
       return;
     }
     setSaving(true);
-    await addWeight(w, noteInput.trim() || undefined);
+    const id = await addWeight(w, noteInput.trim() || undefined);
     setSaving(false);
-    setWeightInput("");
-    setNoteInput("");
+    if (id) {
+      showToast({
+        type: "success",
+        title: "Thành công",
+        message: `Đã cập nhật cân nặng mới: ${w.toFixed(1)} kg.`,
+      });
+      setWeightInput("");
+      setNoteInput("");
+      setModalVisible(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    Alert.alert("Xóa?", "Xóa bản ghi này?", [
+  const handleDeleteWeightLog = (id: string) => {
+    Alert.alert("Xóa mục này?", "Bạn có chắc chắn muốn xóa lần ghi nhận cân nặng này?", [
       { text: "Hủy", style: "cancel" },
-      { text: "Xóa", style: "destructive", onPress: () => removeWeight(id) },
+      {
+        text: "Xóa",
+        style: "destructive",
+        onPress: async () => {
+          await removeWeight(id);
+          showToast({
+            type: "success",
+            title: "Đã xóa",
+            message: "Đã xóa bản ghi cân nặng thành công.",
+          });
+        },
+      },
     ]);
   };
 
-  // Tính trend
-  const getTrend = (): {
-    icon: React.ReactNode;
-    text: string;
-    color: string;
-  } => {
-    if (chartData.length < 2) return { icon: null, text: "Chưa đủ dữ liệu", color: "#94A3B8" };
-    const first = chartData[0].weight_kg;
-    const last = chartData[chartData.length - 1].weight_kg;
-    const diff = last - first;
-    if (Math.abs(diff) < 0.1)
-      return {
-        icon: <TrendMinus size={16} color="#94A3B8" />,
-        text: "Ổn định",
-        color: "#94A3B8",
-      };
-    if (diff < 0)
-      return {
-        icon: <TrendingDown size={16} color="#10B981" />,
-        text: `Giảm ${Math.abs(diff).toFixed(1)} kg`,
-        color: "#10B981",
-      };
-    return {
-      icon: <TrendingUp size={16} color="#EF4444" />,
-      text: `Tăng ${diff.toFixed(1)} kg`,
-      color: "#EF4444",
-    };
+  const formatDate = (isoString: string) => {
+    try {
+      if (!isoString) return "N/A";
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return "N/A";
+      const months = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      ];
+      const m = months[d.getMonth()];
+      if (!m) return "N/A";
+      return `${m} ${d.getDate()}`;
+    } catch {
+      return "N/A";
+    }
   };
-
-  const trend = getTrend();
-
-  // Mini sparkline (bar chart bằng View)
-  const maxWeight =
-    chartData.length > 0 ? Math.max(...chartData.map((d) => d.weight_kg)) : 100;
-  const minWeight =
-    chartData.length > 0 ? Math.min(...chartData.map((d) => d.weight_kg)) : 50;
-  const range = maxWeight - minWeight || 1;
-
-  const todayFormatted = new Date().toLocaleDateString("vi-VN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <OfflineBanner pushContent />
 
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scroll, { paddingBottom: 100 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <ArrowLeft size={22} color="#0F172A" />
+            <ChevronLeft size={22} color="#0F172A" />
           </Pressable>
-          <View>
-            <Text style={styles.title}>Theo dõi cân nặng</Text>
-            <Text style={styles.subtitle}>{todayFormatted}</Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.title}>Weight Tracking</Text>
+            <Text style={styles.subtitle}>Track your progress ⚖️</Text>
           </View>
+          <View style={styles.placeholder} />
         </View>
 
-        {/* Current Weight Card */}
-        <View style={styles.currentCard}>
-          <View style={styles.scaleIconWrap}>
-            <Scale size={32} color="#8B5CF6" />
-          </View>
-          <Text style={styles.currentLabel}>Cân nặng hiện tại</Text>
-          <Text style={styles.currentWeight}>
-            {latestWeight != null
-              ? latestWeight.toFixed(1)
-              : "—"}
-            <Text style={styles.currentUnit}> kg</Text>
-          </Text>
-
-          {/* Trend indicator */}
-          <View style={styles.trendRow}>
-            {trend.icon}
-            <Text style={[styles.trendText, { color: trend.color }]}>
-              {trend.text}
-            </Text>
-            <Text style={styles.trendSub}> (14 ngày)</Text>
-          </View>
-
-          {/* Mini chart */}
-          {chartData.length > 1 && (
-            <View style={styles.sparkline}>
-              {chartData.map((d, i) => {
-                const heightPct = ((d.weight_kg - minWeight) / range) * 60 + 10;
-                return (
-                  <View key={i} style={styles.sparkBar}>
-                    <View
-                      style={[
-                        styles.sparkFill,
-                        {
-                          height: heightPct,
-                          backgroundColor:
-                            i === chartData.length - 1 ? "#8B5CF6" : "#DDD6FE",
-                        },
-                      ]}
-                    />
-                  </View>
-                );
-              })}
+        {/* Side-by-side Cards */}
+        <View style={styles.statsRow}>
+          {/* Card Current */}
+          <View style={styles.statCard}>
+            <View style={[styles.iconWrap, { backgroundColor: "#ECFEFF" }]}>
+              <Scale size={20} color="#0891B2" />
             </View>
-          )}
-        </View>
-
-        {/* Add Weight Form */}
-        <View style={styles.formCard}>
-          <Text style={styles.formTitle}>Ghi cân nặng mới</Text>
-
-          <View style={styles.weightInputRow}>
-            <TextInput
-              style={styles.weightInput}
-              placeholder="0.0"
-              placeholderTextColor="#94A3B8"
-              keyboardType="decimal-pad"
-              value={weightInput}
-              onChangeText={setWeightInput}
-            />
-            <Text style={styles.weightUnit}>kg</Text>
+            <Text style={styles.statLabel}>Current</Text>
+            <Text style={styles.statValue}>
+              {currentW.toFixed(1)}
+              <Text style={styles.statUnit}> kg</Text>
+            </Text>
           </View>
 
-          <TextInput
-            style={[styles.input, { marginTop: 10 }]}
-            placeholder="Ghi chú (tùy chọn)"
-            placeholderTextColor="#94A3B8"
-            value={noteInput}
-            onChangeText={setNoteInput}
-          />
-
-          <Pressable
-            style={[styles.addBtn, saving && styles.addBtnDisabled]}
-            onPress={handleAdd}
-            disabled={saving}
-          >
-            <Scale size={18} color="#fff" />
-            <Text style={styles.addBtnText}>
-              {saving ? "Đang lưu..." : "Lưu cân nặng"}
-            </Text>
-          </Pressable>
+          {/* Card Progress */}
+          <View style={styles.statCard}>
+            <View style={[styles.iconWrap, { backgroundColor: diff <= 0 ? "#ECFDF5" : "#FFF1F2" }]}>
+              {diff <= 0 ? (
+                <TrendingDown size={20} color="#059669" />
+              ) : (
+                <TrendingUp size={20} color="#E11D48" />
+              )}
+            </View>
+            <Text style={styles.statLabel}>Progress</Text>
+            <Text style={styles.statValue}>{progressText}</Text>
+          </View>
         </View>
 
-        {/* History */}
-        {history.length > 0 && (
-          <View style={styles.historyCard}>
-            <Text style={styles.formTitle}>Lịch sử</Text>
-            {history.map((log) => {
-              const date = new Date(log.logged_at).toLocaleDateString("vi-VN", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              });
-              const time = new Date(log.logged_at).toLocaleTimeString("vi-VN", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+        {/* Goal Weight Info Card */}
+        <View style={styles.goalCard}>
+          <View style={styles.goalRow}>
+            <View>
+              <Text style={styles.goalLabel}>Goal Weight</Text>
+              <Text style={styles.goalValue}>{goalW} kg</Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={styles.goalLabel}>Remaining</Text>
+              <Text style={[styles.goalValue, { color: remaining > 0 ? "#10B981" : "#059669" }]}>
+                {remaining > 0 ? `${remaining.toFixed(1)} kg` : "Completed! 🎉"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Progress Bar */}
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
+          </View>
+        </View>
+
+        {/* Weight Trend (Bar Chart) */}
+        <View style={styles.trendCard}>
+          <View style={styles.trendHeader}>
+            <Text style={styles.trendTitle}>Weight Trend</Text>
+            <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
+              {trendIcon}
+              <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
+            </View>
+          </View>
+
+          <View style={styles.chartContainer}>
+            {chartItems.map((d, i) => {
+              // Map height between 20% and 100%
+              const rawHeightPct = rangeW > 0 ? ((d.weight_kg - minW) / rangeW) * 70 + 20 : 60;
+              const heightPct = isNaN(rawHeightPct) ? 60 : rawHeightPct;
               return (
-                <View key={log.id} style={styles.historyItem}>
-                  <View style={styles.historyLeft}>
-                    <View style={styles.historyDot} />
-                    <View>
-                      <Text style={styles.historyWeight}>
-                        {log.weight_kg.toFixed(1)}{" "}
-                        <Text style={styles.historyUnit}>kg</Text>
-                      </Text>
-                      <Text style={styles.historyDate}>
-                        {date} · {time}
-                      </Text>
-                      {log.note ? (
-                        <Text style={styles.historyNote}>{log.note}</Text>
-                      ) : null}
-                    </View>
+                <View key={d.id} style={styles.chartColumn}>
+                  <View style={styles.chartBarContainer}>
+                    <View style={[styles.chartBar, { height: `${heightPct}%` }]} />
                   </View>
-                  <Pressable
-                    onPress={() => handleDelete(log.id)}
-                    hitSlop={8}
-                  >
-                    <Trash2 size={15} color="#CBD5E1" />
-                  </Pressable>
+                  <Text style={styles.chartLabel}>W{i + 1}</Text>
                 </View>
               );
             })}
           </View>
-        )}
+        </View>
 
-        {history.length === 0 && !isLoading && (
-          <View style={styles.emptyState}>
-            <Scale size={40} color="#DDD6FE" />
-            <Text style={styles.emptyText}>Chưa có bản ghi cân nặng nào</Text>
+        {/* Recent Updates */}
+        <View style={styles.updatesCard}>
+          <Text style={styles.updatesTitle}>Recent Updates</Text>
+          {historyList.length > 0 ? (
+            historyList.map((log, index) => {
+              if (!log) return null;
+              return (
+                <View key={log.id || `log-${index}`} style={styles.updateRow}>
+                  <Text style={styles.updateDate}>{formatDate(log.logged_at)}</Text>
+                  <View style={styles.updateRight}>
+                    <Text style={styles.updateWeight}>{(Number(log.weight_kg) || 0).toFixed(1)} kg</Text>
+                    <Pressable
+                      style={styles.deleteBtn}
+                      onPress={() => handleDeleteWeightLog(log.id)}
+                      hitSlop={8}
+                    >
+                      <Trash2 size={16} color="#FDA4AF" />
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.emptyState}>
+              <Scale size={32} color="#CBD5E1" />
+              <Text style={styles.emptyText}>Chưa ghi nhận lịch sử cân nặng</Text>
+            </View>
+          )}
+
+          {isLoading && (
+            <ActivityIndicator size="small" color="#0EA5E9" style={{ marginTop: 16 }} />
+          )}
+        </View>
+
+        {/* AI Insight Card */}
+        <View style={styles.insightCard}>
+          <View style={styles.sparkleWrap}>
+            <Sparkles size={16} color="#34D399" />
+            <Text style={styles.insightBadge}>AI Insight</Text>
           </View>
-        )}
+          <Text style={styles.insightTitle}>
+            {diff < 0 ? "Great progress 🎉" : diff > 0 ? "Stay focused 💪" : "Steady & stable ⚖️"}
+          </Text>
+          <Text style={styles.insightSub}>
+            {diff < 0
+              ? `You lost ${Math.abs(diff).toFixed(1)}kg recently. Keep your current eating habit and hydration routine.`
+              : diff > 0
+              ? `You gained ${diff.toFixed(1)}kg recently. Consider reviewing your daily caloric intake and logging all meals.`
+              : "Your weight has been consistent. Continue staying hydrated and balancing your macro nutrients."}
+          </Text>
+        </View>
       </ScrollView>
+
+      {/* Floating Action Button (FAB) */}
+      <Pressable style={styles.fab} onPress={() => setModalVisible(true)}>
+        <Plus size={24} color="#FFFFFF" strokeWidth={2.5} />
+      </Pressable>
+
+      {/* Slide up Log Modal */}
+      <Modal visible={modalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalDismiss} onPress={() => setModalVisible(false)} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalContent}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Update Weight</Text>
+              <Pressable style={styles.modalCloseBtn} onPress={() => setModalVisible(false)}>
+                <X size={20} color="#475569" />
+              </Pressable>
+            </View>
+
+            {/* Input Row */}
+            <View style={styles.modalInputWrap}>
+              <TextInput
+                style={styles.modalWeightInput}
+                keyboardType="numeric"
+                placeholder="68.5"
+                placeholderTextColor="#94A3B8"
+                value={weightInput}
+                onChangeText={setWeightInput}
+                autoFocus
+              />
+              <Text style={styles.modalWeightUnit}>kg</Text>
+            </View>
+
+            <TextInput
+              style={styles.modalNoteInput}
+              placeholder="Thêm ghi chú (tùy chọn)..."
+              placeholderTextColor="#94A3B8"
+              value={noteInput}
+              onChangeText={setNoteInput}
+            />
+
+            <Pressable
+              style={[styles.modalSaveBtn, saving && styles.modalBtnDisabled]}
+              onPress={handleAddWeightLog}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.modalSaveText}>Save Weight</Text>
+              )}
+            </Pressable>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F7F9F8" },
-  scroll: { paddingHorizontal: 20, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 24, paddingTop: 12 },
+
+  errorBanner: {
+    backgroundColor: "#FCA5A5",
+    padding: 12,
+    alignItems: "center",
+  },
+  errorText: { color: "#7F1D1D", fontWeight: "700" },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    paddingTop: 12,
+    justifyContent: "space-between",
     paddingBottom: 20,
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-  },
-  title: { fontSize: 22, fontWeight: "800", color: "#0F172A" },
-  subtitle: { fontSize: 13, color: "#64748B", marginTop: 2 },
-
-  currentCard: {
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 24,
-    alignItems: "center",
-    marginBottom: 16,
     shadowColor: "#000",
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 2,
   },
-  scaleIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#F5F3FF",
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: "center",
+  },
+  title: { fontSize: 22, fontWeight: "900", color: "#0F172A" },
+  subtitle: { fontSize: 13, color: "#94A3B8", marginTop: 4, fontWeight: "500" },
+  placeholder: { width: 44 },
+
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 16,
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 18,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
   },
-  currentLabel: { fontSize: 13, color: "#94A3B8", marginBottom: 8 },
-  currentWeight: { fontSize: 52, fontWeight: "800", color: "#4C1D95" },
-  currentUnit: { fontSize: 24, fontWeight: "600", color: "#C4B5FD" },
-  trendRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 8,
+  statLabel: {
+    fontSize: 13,
+    color: "#94A3B8",
+    fontWeight: "700",
+    marginBottom: 4,
   },
-  trendText: { fontSize: 13, fontWeight: "700" },
-  trendSub: { fontSize: 11, color: "#94A3B8" },
-
-  sparkline: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 3,
-    height: 80,
-    marginTop: 20,
-    width: "100%",
+  statValue: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#0F172A",
   },
-  sparkBar: { flex: 1, alignItems: "center", justifyContent: "flex-end" },
-  sparkFill: { width: "70%", borderRadius: 4 },
+  statUnit: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#94A3B8",
+  },
 
-  formCard: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+  goalCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
     elevation: 2,
   },
-  formTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
+  goalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 14,
   },
-  weightInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#8B5CF6",
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    height: 64,
+  goalLabel: {
+    fontSize: 13,
+    color: "#94A3B8",
+    fontWeight: "700",
+    marginBottom: 4,
   },
-  weightInput: {
-    flex: 1,
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#4C1D95",
-  },
-  weightUnit: {
-    fontSize: 18,
-    color: "#A78BFA",
-    fontWeight: "600",
-  },
-  input: {
-    height: 48,
-    borderWidth: 1.5,
-    borderColor: "#E2E8F0",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    fontSize: 15,
+  goalValue: {
+    fontSize: 20,
+    fontWeight: "900",
     color: "#0F172A",
-    backgroundColor: "#F8FAFC",
   },
-  addBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#8B5CF6",
-    borderRadius: 14,
-    height: 50,
-    marginTop: 14,
+  progressBarBg: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#F1F5F9",
+    overflow: "hidden",
   },
-  addBtnDisabled: { backgroundColor: "#DDD6FE" },
-  addBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: "#10B981",
+  },
 
-  historyCard: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+  trendCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
     elevation: 2,
   },
-  historyItem: {
+  trendHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    marginBottom: 20,
   },
-  historyLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  historyDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#8B5CF6",
+  trendTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0F172A",
   },
-  historyWeight: { fontSize: 16, fontWeight: "700", color: "#4C1D95" },
-  historyUnit: { fontSize: 12, color: "#C4B5FD" },
-  historyDate: { fontSize: 12, color: "#94A3B8", marginTop: 2 },
-  historyNote: { fontSize: 11, color: "#64748B", marginTop: 2, fontStyle: "italic" },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
 
-  emptyState: { alignItems: "center", paddingVertical: 40, gap: 12 },
-  emptyText: { color: "#94A3B8", fontSize: 14 },
+  chartContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    height: 140,
+    paddingHorizontal: 8,
+  },
+  chartColumn: {
+    alignItems: "center",
+    flex: 1,
+  },
+  chartBarContainer: {
+    height: "80%",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    width: "100%",
+    marginBottom: 6,
+  },
+  chartBar: {
+    width: 24,
+    backgroundColor: "#0EA5E9",
+    borderRadius: 12,
+  },
+  chartLabel: {
+    fontSize: 11,
+    color: "#94A3B8",
+    fontWeight: "800",
+  },
+
+  updatesCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  updatesTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 16,
+  },
+  updateRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F8FAFC",
+  },
+  updateDate: {
+    fontSize: 14,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  updateRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  updateWeight: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  deleteBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: "#FFF1F2",
+  },
+
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 24,
+    gap: 8,
+  },
+  emptyText: {
+    color: "#94A3B8",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  insightCard: {
+    backgroundColor: "#0F172A",
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  sparkleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+  },
+  insightBadge: {
+    color: "#34D399",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  insightTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    marginBottom: 8,
+  },
+  insightSub: {
+    color: "#CBD5E1",
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: "500",
+  },
+
+  fab: {
+    position: "absolute",
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#10CDBA",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#10B981",
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+    zIndex: 50,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
+    justifyContent: "flex-end",
+  },
+  modalDismiss: {
+    flex: 1,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    paddingBottom: Platform.OS === "ios" ? 40 : 24,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#0F172A",
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalInputWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#E2E8F0",
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    height: 70,
+    marginBottom: 16,
+  },
+  modalWeightInput: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: "#0F172A",
+    textAlign: "center",
+    marginRight: 6,
+    padding: 0,
+  },
+  modalWeightUnit: {
+    fontSize: 20,
+    color: "#94A3B8",
+    fontWeight: "700",
+  },
+  modalNoteInput: {
+    height: 50,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: "#0F172A",
+    backgroundColor: "#F8FAFC",
+    marginBottom: 20,
+  },
+  modalSaveBtn: {
+    backgroundColor: "#0F172A",
+    borderRadius: 25,
+    height: 50,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  modalBtnDisabled: {
+    backgroundColor: "#94A3B8",
+  },
+  modalSaveText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 15,
+  },
 });
+

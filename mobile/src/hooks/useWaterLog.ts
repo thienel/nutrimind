@@ -45,15 +45,17 @@ export function useWaterLog(
 
   const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
 
+  const numericUserId = userId ? Number(userId) : null;
+
   useEffect(() => {
-    if (!userId) return;
+    if (!numericUserId) return;
 
     let cancelled = false;
     setIsLoading(true);
 
     Promise.all([
-      getWaterByDate(userId, targetDate),
-      getDailyWaterTotal(userId, targetDate),
+      getWaterByDate(numericUserId, targetDate),
+      getDailyWaterTotal(numericUserId, targetDate),
     ])
       .then(([waterLogs, total]) => {
         if (cancelled) return;
@@ -71,13 +73,13 @@ export function useWaterLog(
     return () => {
       cancelled = true;
     };
-  }, [userId, targetDate, refreshTick]);
+  }, [numericUserId, targetDate, refreshTick]);
 
   const addWater = useCallback(
     async (amountMl: number): Promise<string | null> => {
-      if (!userId) return null;
+      if (!numericUserId) return null;
       try {
-        const id = await logWater({ userId, amountMl });
+        const id = await logWater({ userId: numericUserId, amountMl });
         refresh();
         return id;
       } catch (e: unknown) {
@@ -86,21 +88,21 @@ export function useWaterLog(
         return null;
       }
     },
-    [userId, refresh]
+    [numericUserId, refresh]
   );
 
   const removeWater = useCallback(
     async (id: string): Promise<void> => {
-      if (!userId) return;
+      if (!numericUserId) return;
       try {
-        await deleteWaterLog(id, userId);
+        await deleteWaterLog(id, numericUserId);
         refresh();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Lỗi xóa";
         setError(msg);
       }
     },
-    [userId, refresh]
+    [numericUserId, refresh]
   );
 
   return { logs, totalMl, isLoading, error, addWater, removeWater, refresh };

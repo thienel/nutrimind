@@ -17,6 +17,11 @@
  */
 
 import { api } from "@/lib/apiClient";
+import { getDb } from "@/lib/db";
+import {
+  updateMealServerId,
+  getMealServerId,
+} from "@/lib/repositories/mealRepository";
 import {
   getPending,
   markSynced,
@@ -37,22 +42,85 @@ function sleep(ms: number): Promise<void> {
  */
 async function processSyncItem(item: SyncQueueItem): Promise<void> {
   const payload = JSON.parse(item.payload) as Record<string, unknown>;
+  const db = await getDb();
 
   if (item.action === "create") {
     if (item.entity === "meal") {
-      await api.post("/nutrition/meals", payload);
+      let mealType = (payload.mealType as string || "snack").toUpperCase();
+      if (mealType !== "BREAKFAST" && mealType !== "LUNCH" && mealType !== "DINNER") {
+        mealType = "SNACK";
+      }
+      const body = {
+        food_name: payload.name,
+        meal_type: mealType,
+        calories: Number(payload.calories),
+        protein_g: Number(payload.proteinG || 0),
+        carb_g: Number(payload.carbsG || 0),
+        fat_g: Number(payload.fatG || 0),
+        source: "MANUAL",
+        logged_date: (payload.loggedAt as string).slice(0, 10),
+        client_created_at: payload.loggedAt,
+      };
+      const res = await api.post<{ id: number }>("/meals", body);
+      if (res && res.id) {
+        await updateMealServerId(item.local_id, String(res.id));
+      }
     } else if (item.entity === "water") {
-      await api.post("/nutrition/water-logs", payload);
+      const body = {
+        volume_ml: Number(payload.amount_ml),
+        logged_date: (payload.logged_at as string).slice(0, 10),
+        client_created_at: payload.logged_at,
+      };
+      const res = await api.post<{ id: number }>("/water", body);
+      if (res && res.id) {
+        await db.runAsync(
+          `UPDATE local_water_entries
+           SET server_id = ?, sync_status = 'synced'
+           WHERE local_id = ?;`,
+          [res.id, item.local_id]
+        );
+      }
     } else if (item.entity === "weight") {
-      await api.post("/nutrition/weight-logs", payload);
+      const body = {
+        weight_kg: Number(payload.weight_kg),
+        logged_at: (payload.logged_at as string).slice(0, 10),
+        note: (payload.note as string) || "",
+        client_created_at: payload.logged_at,
+      };
+      const res = await api.post<{ id: number }>("/health/weight", body);
+      if (res && res.id) {
+        await db.runAsync(
+          `UPDATE local_weight_entries
+           SET server_id = ?, sync_status = 'synced'
+           WHERE local_id = ?;`,
+          [res.id, item.local_id]
+        );
+      }
     }
   } else if (item.action === "delete") {
     if (item.entity === "meal") {
-      await api.delete(`/nutrition/meals/${item.local_id}`);
+      const serverId = await getMealServerId(item.local_id);
+      if (serverId) {
+        await api.delete(`/meals/${serverId}`);
+      }
     } else if (item.entity === "water") {
-      await api.delete(`/nutrition/water-logs/${item.local_id}`);
+      const row = await db.getFirstAsync<{ server_id: number }>(
+        `SELECT server_id FROM local_water_entries WHERE local_id = ?;`,
+        [item.local_id]
+      );
+      if (row?.server_id) {
+        await api.delete(`/water/${row.server_id}`);
+      }
+      await db.runAsync(
+        `DELETE FROM local_water_entries WHERE local_id = ?;`,
+        [item.local_id]
+      );
     } else if (item.entity === "weight") {
-      await api.delete(`/nutrition/weight-logs/${item.local_id}`);
+      // No server weight deletion route exists. Just delete locally
+      await db.runAsync(
+        `DELETE FROM local_weight_entries WHERE local_id = ?;`,
+        [item.local_id]
+      );
     }
   }
 }
