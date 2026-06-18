@@ -1,38 +1,222 @@
-import React from "react";
-import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import React, { useCallback, useState } from "react";
+import { useFocusEffect, router } from "expo-router";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ScrollView,
+  Alert,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
 import { ChevronLeft, Flame, Droplets } from "lucide-react-native";
 
+import {
+  getFriends,
+  sendCheer,
+  respondFriendRequest,
+} from "@/services/friendService";
+
+const avatarColors = ["#06B6D4", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
+
 export default function Friends() {
+  // State lưu danh sách bạn bè đã accept
+  const [friends, setFriends] = useState<any[]>([]);
+
+  // State lưu danh sách lời mời kết bạn đang chờ xử lý
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+
+  /**
+   * Hàm load lại toàn bộ danh sách bạn bè + request
+   *
+   * Dùng useCallback để:
+   * - tránh tạo lại function mỗi lần component re-render
+   * - tiện gọi lại sau khi accept/reject
+   */
+  const loadFriends = useCallback(async () => {
+    try {
+      // gọi API lấy danh sách bạn bè
+      const res = await getFriends();
+
+      // cập nhật state friends
+      // nếu backend không trả thì fallback []
+      setFriends(res.friends || []);
+
+      // cập nhật state pending requests
+      setPendingRequests(res.pending_received || []);
+    } catch (err) {
+      // log lỗi nếu API fail
+      console.log("GET FRIENDS ERROR:", err);
+    }
+  }, []);
+
+  /**
+   * useFocusEffect:
+   * chạy mỗi lần screen được focus (mở vào hoặc quay lại)
+   *
+   * Khác useEffect:
+   * - useEffect chỉ chạy khi mount
+   * - useFocusEffect chạy lại khi quay về màn này
+   */
+  useFocusEffect(
+    useCallback(() => {
+      // flag kiểm tra component còn active không
+      // tránh lỗi setState sau khi unmount
+      let isActive = true;
+
+      const fetchData = async () => {
+        try {
+          // gọi API lấy friend list
+          const res = await getFriends();
+
+          // nếu screen đã unmount thì dừng
+          if (!isActive) return;
+
+          // update state khi còn active
+          setFriends(res.friends || []);
+          setPendingRequests(res.pending_received || []);
+        } catch (err) {
+          console.log("GET FRIENDS ERROR:", err);
+        }
+      };
+
+      // chạy fetch ngay khi screen focus
+      fetchData();
+
+      /**
+       * cleanup function:
+       * chạy khi screen unfocus/unmount
+       *
+       * set false để chặn setState sau khi component đã bị destroy
+       */
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
+
+  /**
+   * Gửi cheer (thả động viên) cho bạn bè
+   *
+   * @param userId id người nhận
+   * @param reaction loại reaction:
+   * - keep_going
+   * - nice_job
+   * - great_progress
+   */
+  const handleCheer = async (
+    userId: number,
+    reaction: "keep_going" | "nice_job" | "great_progress",
+  ) => {
+    try {
+      // log payload để debug xem gửi đúng chưa
+      console.log("CHEER PAYLOAD:", {
+        recipient_id: userId,
+        reaction,
+      });
+
+      // gọi API gửi cheer
+      const res = await sendCheer(userId, reaction);
+
+      // log response backend trả về
+      console.log("CHEER RESPONSE:", res);
+
+      // hiện thông báo thành công
+      Alert.alert("Success", "Cheer sent 🎉");
+    } catch (err: any) {
+      /**
+       * log full lỗi:
+       * ưu tiên response.data từ backend
+       * nếu không có thì log object lỗi gốc
+       */
+      console.log(
+        "CHEER ERROR FULL:",
+        JSON.stringify(err?.response?.data || err, null, 2),
+      );
+    }
+  };
+
+  /**
+   * Accept lời mời kết bạn
+   *
+   * Flow:
+   * 1. gọi API accept
+   * 2. báo thành công
+   * 3. reload lại danh sách
+   */
+  const handleAccept = async (friendshipId: number) => {
+    try {
+      // gửi action accept lên backend
+      await respondFriendRequest(friendshipId, "accept");
+
+      // popup thành công
+      Alert.alert("Success", "Friend request accepted 🎉");
+
+      // load lại danh sách để cập nhật UI
+      await loadFriends();
+    } catch (err) {
+      console.log("ACCEPT ERROR:", err);
+    }
+  };
+
+  /**
+   * Từ chối lời mời kết bạn
+   *
+   * Flow:
+   * 1. gọi API decline
+   * 2. báo declined
+   * 3. reload lại danh sách
+   */
+  const handleReject = async (friendshipId: number) => {
+    try {
+      // gửi action decline lên backend
+      await respondFriendRequest(friendshipId, "decline");
+
+      // popup thông báo
+      Alert.alert("Declined", "Friend request declined");
+
+      // load lại danh sách
+      await loadFriends();
+    } catch (err) {
+      console.log("DECLINE ERROR:", err);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
+        {/* HEADER */}
         <View style={styles.header}>
-          {/* Nút quay lại */}
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <ChevronLeft size={22} />
           </Pressable>
 
           <View style={{ marginLeft: 14 }}>
             <Text style={styles.title}>Friends Motivation</Text>
-
             <Text style={styles.subtitle}>Stay motivated together 💪</Text>
           </View>
         </View>
 
-        {/* Card tổng quan số bạn đang active */}
-        <View style={styles.activeCard}>
-          <Text style={styles.activeLabel}>Active Friends</Text>
+        {/* SUMMARY */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Your Support Circle</Text>
 
-          <Text style={styles.activeCount}>4 Friends 🔥</Text>
-
-          <Text style={styles.activeDesc}>
-            Encourage each other and stay on track.
+          <Text style={styles.summaryDesc}>
+            Build healthy habits together and stay accountable.
           </Text>
 
-          {/* Nút sang màn Add Friend */}
+          <View style={styles.statsRow}>
+            <View>
+              <Text style={styles.statNumber}>{friends.length}</Text>
+              <Text style={styles.statLabel}>Friends</Text>
+            </View>
+
+            <View>
+              <Text style={styles.statNumber}>{pendingRequests.length}</Text>
+              <Text style={styles.statLabel}>Requests</Text>
+            </View>
+          </View>
+
           <Pressable
             style={styles.addFriendButton}
             onPress={() => router.push("/add-friend")}
@@ -41,75 +225,122 @@ export default function Friends() {
           </Pressable>
         </View>
 
-        {/* Danh sách bạn bè */}
-        <View style={{ marginTop: 20 }}>
-          <FriendCard
-            name="Linh"
-            water="2.1L / 2.5L"
-            status="Completed hydration goal 💧"
-            streak="5-day streak"
-          />
+        {/* PENDING */}
+        {pendingRequests.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Pending Requests</Text>
 
-          <FriendCard
-            name="Minh"
-            water="1.8L / 2.5L"
-            status="Hit protein target 💪"
-            streak="3-day streak"
-          />
+            {pendingRequests.map((req) => (
+              <RequestCard
+                key={req.friendship_id}
+                request={req}
+                onAccept={() => handleAccept(req.friendship_id)}
+                onReject={() => handleReject(req.friendship_id)}
+              />
+            ))}
+          </>
+        )}
 
+        {/* FRIENDS */}
+        <Text style={styles.sectionTitle}>My Friends</Text>
+
+        {friends.map((friend) => (
           <FriendCard
-            name="An"
-            water="0.9L / 2.5L"
-            status="Didn't log meal today"
-            streak="1-day streak"
+            key={friend.user_id}
+            friend={friend}
+            onCheer={handleCheer}
           />
-        </View>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function FriendCard({ name, water, status, streak }: any) {
+function RequestCard({ request, onAccept, onReject }: any) {
+  const color = avatarColors[request.user_id % avatarColors.length];
+
   return (
-    <View style={styles.friendCard}>
-      {/* Thông tin bạn bè */}
+    <View style={styles.requestCard}>
       <View style={styles.friendTop}>
-        {/* Avatar */}
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{name.charAt(0)}</Text>
+        <View style={[styles.avatar, { backgroundColor: color }]}>
+          <Text style={styles.avatarText}>
+            {request.display_name.charAt(0).toUpperCase()}
+          </Text>
         </View>
 
         <View style={{ flex: 1 }}>
-          <Text style={styles.friendName}>{name}</Text>
-
-          <Text style={styles.friendStatus}>{status}</Text>
-
-          {/* Badge thông tin */}
-          <View style={styles.badgeRow}>
-            <MiniBadge
-              icon={<Droplets size={14} color="#64748B" />}
-              text={water}
-            />
-
-            <MiniBadge
-              icon={<Flame size={14} color="#64748B" />}
-              text={streak}
-            />
-          </View>
+          <Text style={styles.friendName}>{request.display_name}</Text>
+          <Text style={styles.friendStatus}>Wants to connect with you 👋</Text>
         </View>
       </View>
 
-      {/* Các nút động viên */}
-      <View style={styles.actionRow}>
-        <ActionButton text="💪 Keep Going" />
-        <ActionButton text="👏 Nice Job" />
-        <ActionButton text="🔥 Great Progress" />
+      <View style={styles.requestActions}>
+        <Pressable style={styles.rejectButton} onPress={onReject}>
+          <Text style={styles.rejectButtonText}>Decline</Text>
+        </Pressable>
+
+        <Pressable style={styles.acceptButton} onPress={onAccept}>
+          <Text style={styles.acceptButtonText}>Accept</Text>
+        </Pressable>
       </View>
     </View>
   );
 }
 
-function MiniBadge({ icon, text }: { icon: React.ReactNode; text: string }) {
+function FriendCard({ friend, onCheer }: any) {
+  const color = avatarColors[friend.user_id % avatarColors.length];
+
+  return (
+    <View style={styles.friendCard}>
+      <View style={styles.friendTop}>
+        <View style={[styles.avatar, { backgroundColor: color }]}>
+          <Text style={styles.avatarText}>
+            {friend.display_name.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text style={styles.friendName}>{friend.display_name}</Text>
+
+          <Text style={styles.friendStatus}>
+            {friend.last_activity_at
+              ? "Recently active 🌱"
+              : "Keep each other motivated 💪"}
+          </Text>
+
+          <View style={styles.badgeRow}>
+            <MiniBadge
+              icon={<Droplets size={14} color="#64748B" />}
+              text="Nutrition Buddy"
+            />
+
+            <MiniBadge
+              icon={<Flame size={14} color="#64748B" />}
+              text={`${friend.current_streak} Day Streak`}
+            />
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.actionRow}>
+        <ActionButton
+          text="💪"
+          onPress={() => onCheer(friend.user_id, "keep_going")}
+        />
+        <ActionButton
+          text="👏"
+          onPress={() => onCheer(friend.user_id, "nice_job")}
+        />
+        <ActionButton
+          text="🔥"
+          onPress={() => onCheer(friend.user_id, "great_progress")}
+        />
+      </View>
+    </View>
+  );
+}
+
+function MiniBadge({ icon, text }: any) {
   return (
     <View style={styles.badge}>
       {icon}
@@ -118,27 +349,17 @@ function MiniBadge({ icon, text }: { icon: React.ReactNode; text: string }) {
   );
 }
 
-function ActionButton({ text }: { text: string }) {
+function ActionButton({ text, onPress }: any) {
   return (
-    <Pressable style={styles.actionButton}>
-      <Text style={styles.actionButtonText}>{text}</Text>
+    <Pressable style={styles.actionButton} onPress={onPress}>
+      <Text style={{ fontSize: 20 }}>{text}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F7F9F8",
-    paddingHorizontal: 20,
-  },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
-  },
-
+  container: { flex: 1, backgroundColor: "#F7F9F8", paddingHorizontal: 20 },
+  header: { flexDirection: "row", alignItems: "center", marginTop: 10 },
   backButton: {
     width: 44,
     height: 44,
@@ -147,103 +368,58 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
-  title: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-
-  subtitle: {
-    color: "#94A3B8",
-    marginTop: 4,
-  },
-
-  activeCard: {
+  title: { fontSize: 26, fontWeight: "800", color: "#0F172A" },
+  subtitle: { color: "#94A3B8", marginTop: 4 },
+  summaryCard: {
     marginTop: 24,
     borderRadius: 28,
-    padding: 20,
+    padding: 22,
     backgroundColor: "#10B981",
   },
-
-  activeLabel: {
-    color: "white",
-    opacity: 0.8,
-  },
-
-  activeCount: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "white",
-    marginTop: 8,
-  },
-
-  activeDesc: {
-    color: "white",
-    opacity: 0.8,
-    marginTop: 10,
-  },
-
+  summaryTitle: { fontSize: 24, fontWeight: "800", color: "white" },
+  summaryDesc: { color: "white", opacity: 0.9, marginTop: 8 },
+  statsRow: { flexDirection: "row", gap: 40, marginTop: 18 },
+  statNumber: { fontSize: 24, fontWeight: "800", color: "white" },
+  statLabel: { color: "white", opacity: 0.8 },
   addFriendButton: {
-    marginTop: 18,
+    marginTop: 20,
     backgroundColor: "white",
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderRadius: 18,
     alignSelf: "flex-start",
   },
-
-  addFriendText: {
-    color: "#0F172A",
+  addFriendText: { color: "#0F172A", fontWeight: "700" },
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: "700",
+    marginTop: 24,
+    marginBottom: 12,
   },
-
+  requestCard: {
+    backgroundColor: "white",
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 16,
+  },
   friendCard: {
     backgroundColor: "white",
     borderRadius: 24,
     padding: 18,
     marginBottom: 16,
   },
-
-  friendTop: {
-    flexDirection: "row",
-    gap: 14,
-  },
-
+  friendTop: { flexDirection: "row", gap: 14 },
   avatar: {
     width: 52,
     height: 52,
     borderRadius: 999,
-    backgroundColor: "#06B6D4",
     justifyContent: "center",
     alignItems: "center",
   },
-
-  avatarText: {
-    color: "white",
-    fontWeight: "700",
-    fontSize: 18,
-  },
-
-  friendName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-
-  friendStatus: {
-    marginTop: 4,
-    color: "#94A3B8",
-    fontSize: 14,
-  },
-
-  badgeRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 12,
-    flexWrap: "wrap",
-  },
-
+  avatarText: { color: "white", fontWeight: "700", fontSize: 18 },
+  friendName: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
+  friendStatus: { marginTop: 4, color: "#94A3B8", fontSize: 14 },
+  badgeRow: { flexDirection: "row", gap: 10, marginTop: 12 },
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -253,31 +429,31 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
   },
-
-  badgeText: {
-    fontSize: 13,
-    color: "#64748B",
-  },
-
-  actionRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 18,
-  },
-
+  badgeText: { fontSize: 13, color: "#64748B" },
+  actionRow: { flexDirection: "row", gap: 12, marginTop: 18 },
   actionButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: "#0F172A",
+    width: 52,
+    height: 52,
+    borderRadius: 999,
+    backgroundColor: "#F8FAFC",
     justifyContent: "center",
     alignItems: "center",
   },
-
-  actionButtonText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "center",
+  requestActions: { flexDirection: "row", gap: 10, marginTop: 14 },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: "#FEE2E2",
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
   },
+  rejectButtonText: { color: "#DC2626", fontWeight: "700" },
+  acceptButton: {
+    flex: 1,
+    backgroundColor: "#10B981",
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  acceptButtonText: { color: "white", fontWeight: "700" },
 });
