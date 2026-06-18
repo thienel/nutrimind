@@ -25,43 +25,128 @@ import {
   FriendSearchItem,
 } from "@/services/friendService";
 
+const avatarColors = ["#10B981", "#06B6D4", "#F59E0B", "#8B5CF6", "#EF4444"];
+
+/**
+ * Hàm convert friendship_status từ backend
+ * thành text hiển thị cho user
+ */
+const getStatusText = (status: string) => {
+  switch (status) {
+    // đã là bạn bè
+    case "friends":
+      return "Already in your circle 🌱";
+
+    // đã gửi request, đang chờ đối phương accept
+    case "pending_sent":
+      return "Waiting for response ⏳";
+
+    // người kia đã gửi request cho mình trước
+    case "pending_received":
+      return "Sent you a request 👋";
+
+    // chưa có quan hệ gì
+    default:
+      return "Ready to connect ✨";
+  }
+};
+
 export default function AddFriend() {
+  /**
+   * keyword:
+   * lưu nội dung user nhập vào ô search
+   */
   const [keyword, setKeyword] = useState("");
+
+  /**
+   * users:
+   * lưu kết quả tìm kiếm user từ backend
+   */
   const [users, setUsers] = useState<FriendSearchItem[]>([]);
+
+  /**
+   * loading:
+   * dùng để show spinner khi đang search
+   */
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Search user theo keyword
+   *
+   * Flow:
+   * 1. check input rỗng
+   * 2. bật loading
+   * 3. gọi API search
+   * 4. update danh sách users
+   * 5. tắt loading
+   */
   const handleSearch = async () => {
     try {
+      // nếu input rỗng thì không search
       if (!keyword.trim()) return;
 
+      // bật loading trước khi gọi API
       setLoading(true);
 
+      // gọi API search
       const res = await searchUsers(keyword);
 
+      // set kết quả vào state
+      // nếu backend không trả items thì fallback []
       setUsers(res.items || []);
     } catch (err) {
+      // log lỗi để debug
       console.log("SEARCH ERROR:", err);
+
+      // báo lỗi cho user
       Alert.alert("Error", "Cannot search users");
     } finally {
+      // luôn tắt loading dù thành công hay fail
       setLoading(false);
     }
   };
 
+  /**
+   * Gửi lời mời kết bạn
+   *
+   * @param id user_id của người muốn add
+   *
+   * Flow:
+   * 1. gọi API send request
+   * 2. hiện thông báo thành công
+   * 3. update local state để đổi status
+   */
   const handleAdd = async (id: number) => {
     try {
+      // gọi API gửi request
       await sendFriendRequest(id);
 
-      Alert.alert("Success", "Friend request sent");
+      // thông báo thành công
+      Alert.alert("Success", "Friend request sent 🎉");
 
-      // update local state
+      /**
+       * update local state ngay để UI đổi luôn
+       * không cần gọi search lại
+       *
+       * tìm đúng user vừa add
+       * đổi friendship_status thành pending_sent
+       */
       setUsers((prev) =>
         prev.map((u) =>
-          u.user_id === id ? { ...u, friendship_status: "pending_sent" } : u,
+          u.user_id === id
+            ? {
+                ...u,
+                friendship_status: "pending_sent",
+              }
+            : u,
         ),
       );
     } catch (err) {
+      // log lỗi debug
       console.log("ADD ERROR:", err);
-      Alert.alert("Error", "Cannot send friend request");
+
+      // báo lỗi cho user
+      Alert.alert("Error", "Cannot send request");
     }
   };
 
@@ -75,17 +160,19 @@ export default function AddFriend() {
           </Pressable>
 
           <View>
-            <Text style={styles.title}>Add Friend</Text>
-            <Text style={styles.subtitle}>Stay healthy together 💪</Text>
+            <Text style={styles.title}>Add Friends</Text>
+            <Text style={styles.subtitle}>
+              Build your healthy support circle 🌱
+            </Text>
           </View>
         </View>
 
-        {/* SEARCH BOX */}
+        {/* SEARCH */}
         <View style={styles.searchBox}>
           <Search size={18} color="#94A3B8" />
 
           <TextInput
-            placeholder="Search by name or email"
+            placeholder="Search by name"
             style={styles.input}
             value={keyword}
             onChangeText={setKeyword}
@@ -93,20 +180,19 @@ export default function AddFriend() {
           />
         </View>
 
-        {/* SEARCH BUTTON */}
         <Pressable style={styles.searchBtn} onPress={handleSearch}>
           <Text style={styles.searchBtnText}>
-            {loading ? "Searching..." : "Search"}
+            {loading ? "Searching..." : "Find Friends"}
           </Text>
         </Pressable>
 
         {/* RESULTS */}
-        <Text style={styles.sectionTitle}>Suggested Friends</Text>
+        <Text style={styles.sectionTitle}>People</Text>
 
         {loading ? (
           <ActivityIndicator size="large" color="#10B981" />
         ) : users.length === 0 ? (
-          <Text style={styles.emptyText}>No result found</Text>
+          <Text style={styles.emptyText}>Search someone to connect ✨</Text>
         ) : (
           users.map((user) => (
             <FriendCard
@@ -128,20 +214,25 @@ function FriendCard({
   user: FriendSearchItem;
   onAdd: () => void;
 }) {
+  const color = avatarColors[user.user_id % avatarColors.length];
+
   return (
     <View style={styles.card}>
       <View style={styles.row}>
         {/* Avatar */}
-        <View style={styles.avatar}>
+        <View style={[styles.avatar, { backgroundColor: color }]}>
           <Text style={styles.avatarText}>
             {user.display_name.charAt(0).toUpperCase()}
           </Text>
         </View>
 
-        <View>
+        {/* Info */}
+        <View style={{ flex: 1 }}>
           <Text style={styles.name}>{user.display_name}</Text>
 
-          <Text style={styles.email}>{user.email || "No email available"}</Text>
+          <Text style={styles.subText}>
+            {getStatusText(user.friendship_status)}
+          </Text>
         </View>
       </View>
 
@@ -157,7 +248,6 @@ function ActionButton({
   status: string;
   onPress: () => void;
 }) {
-  // đã là bạn
   if (status === "friends") {
     return (
       <View style={styles.addedBtn}>
@@ -167,7 +257,6 @@ function ActionButton({
     );
   }
 
-  // đã gửi request
   if (status === "pending_sent") {
     return (
       <View style={styles.pendingBtn}>
@@ -177,17 +266,15 @@ function ActionButton({
     );
   }
 
-  // người kia gửi mình trước
   if (status === "pending_received") {
     return (
-      <View style={styles.pendingBtn}>
+      <View style={styles.requestBtn}>
         <Clock3 size={16} color="#3B82F6" />
-        <Text style={styles.pendingText}>Requested</Text>
+        <Text style={styles.requestText}>Requested</Text>
       </View>
     );
   }
 
-  // chưa kết bạn
   return (
     <Pressable style={styles.addBtn} onPress={onPress}>
       <UserPlus size={16} color="white" />
@@ -221,6 +308,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: "800",
+    color: "#0F172A",
   },
 
   subtitle: {
@@ -229,13 +317,13 @@ const styles = StyleSheet.create({
   },
 
   searchBox: {
-    marginTop: 20,
+    marginTop: 24,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "white",
     borderRadius: 20,
     paddingHorizontal: 16,
-    height: 56,
+    height: 58,
   },
 
   input: {
@@ -244,10 +332,10 @@ const styles = StyleSheet.create({
   },
 
   searchBtn: {
-    marginTop: 12,
-    backgroundColor: "#0F172A",
-    height: 48,
-    borderRadius: 16,
+    marginTop: 14,
+    backgroundColor: "#10B981",
+    height: 52,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -255,28 +343,33 @@ const styles = StyleSheet.create({
   searchBtnText: {
     color: "white",
     fontWeight: "700",
+    fontSize: 15,
   },
 
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    marginVertical: 20,
+    marginVertical: 22,
   },
 
   emptyText: {
     textAlign: "center",
     color: "#94A3B8",
-    marginTop: 20,
+    marginTop: 30,
   },
 
   card: {
     backgroundColor: "white",
-    borderRadius: 24,
+    borderRadius: 26,
     padding: 18,
     marginBottom: 16,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
   },
 
   row: {
@@ -287,10 +380,9 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    width: 52,
-    height: 52,
+    width: 54,
+    height: 54,
     borderRadius: 999,
-    backgroundColor: "#10B981",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -303,10 +395,11 @@ const styles = StyleSheet.create({
 
   name: {
     fontWeight: "700",
-    fontSize: 15,
+    fontSize: 16,
+    color: "#0F172A",
   },
 
-  email: {
+  subText: {
     color: "#94A3B8",
     marginTop: 4,
     fontSize: 13,
@@ -315,15 +408,16 @@ const styles = StyleSheet.create({
   addBtn: {
     flexDirection: "row",
     gap: 6,
-    backgroundColor: "#0F172A",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    backgroundColor: "#10B981",
+    paddingVertical: 11,
+    paddingHorizontal: 16,
     borderRadius: 16,
+    alignItems: "center",
   },
 
   addBtnText: {
     color: "white",
-    fontWeight: "600",
+    fontWeight: "700",
   },
 
   addedBtn: {
@@ -333,24 +427,41 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 16,
+    alignItems: "center",
   },
 
   addedText: {
     color: "#10B981",
-    fontWeight: "600",
+    fontWeight: "700",
   },
 
   pendingBtn: {
     flexDirection: "row",
     gap: 6,
-    backgroundColor: "#FFFBEB",
+    backgroundColor: "#FEF3C7",
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderRadius: 16,
+    alignItems: "center",
   },
 
   pendingText: {
-    fontWeight: "600",
-    color: "#F59E0B",
+    fontWeight: "700",
+    color: "#D97706",
+  },
+
+  requestBtn: {
+    flexDirection: "row",
+    gap: 6,
+    backgroundColor: "#DBEAFE",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+
+  requestText: {
+    fontWeight: "700",
+    color: "#2563EB",
   },
 });
