@@ -59,8 +59,8 @@ export default function ProgressScreen() {
         contentContainerStyle={styles.scroll}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Tiến độ</Text>
-          <Text style={styles.subtitle}>Tổng quan 7 ngày qua</Text>
+          <Text style={styles.title}>Progress</Text>
+          <Text style={styles.subtitle}>Your 7-day nutrition overview</Text>
         </View>
 
         <View style={styles.summaryRow}>
@@ -69,16 +69,16 @@ export default function ProgressScreen() {
             bg="#ECFDF5"
             label="Avg Deficit"
             value={`${avgDeficit >= 0 ? "+" : ""}${avgDeficit}`}
-            unit="kcal/ngày"
+            unit="kcal/day"
             valueColor={avgDeficit >= 0 ? "#10B981" : "#EF4444"}
           />
 
           <SummaryCard
             icon={<Droplets size={20} color="#3B82F6" />}
             bg="#EFF6FF"
-            label="Tổng nước"
+            label="Total Water"
             value={weeklyWaterL.toFixed(1)}
-            unit="L / 7 ngày"
+            unit="L / 7 days"
             valueColor="#3B82F6"
           />
         </View>
@@ -91,7 +91,7 @@ export default function ProgressScreen() {
             />
 
             <Text style={styles.weightChangeLabel}>
-              Cân nặng thay đổi (30 ngày)
+              Weight Change (30 days)
             </Text>
 
             <Text
@@ -109,7 +109,7 @@ export default function ProgressScreen() {
         <View style={styles.chartCard}>
           <View style={styles.chartHeader}>
             <Utensils size={16} color="#F59E0B" />
-            <Text style={styles.chartTitle}>Calories 7 ngày</Text>
+            <Text style={styles.chartTitle}>7-Day Calories</Text>
           </View>
 
           {calorieHistory.length > 0 ? (
@@ -117,7 +117,7 @@ export default function ProgressScreen() {
               {calorieHistory.map((d, i) => {
                 const pct = (d.calories / maxCal) * 100;
                 const dayLabel = dateKeyToLocalDate(d.date).toLocaleDateString(
-                  "vi-VN",
+                  "en-US",
                   {
                     weekday: "short",
                   }
@@ -153,40 +153,38 @@ export default function ProgressScreen() {
             </View>
           ) : (
             <View style={styles.noData}>
-              <Text style={styles.noDataText}>Chưa có dữ liệu</Text>
+              <Text style={styles.noDataText}>No data yet</Text>
             </View>
           )}
 
-          <Text style={styles.goalHint}>
-            Mục tiêu: {CALORIE_GOAL} kcal/ngày
-          </Text>
+          <Text style={styles.goalHint}>Goal: {CALORIE_GOAL} kcal/day</Text>
         </View>
 
         <View style={styles.linksCard}>
-          <Text style={styles.linksTitle}>Xem chi tiết</Text>
+          <Text style={styles.linksTitle}>Details</Text>
 
           <QuickLink
-            label="Log bữa ăn"
-            sub={`Avg ${avgDailyCalories} kcal/ngày`}
+            label="Meal Log"
+            sub={`Avg ${avgDailyCalories} kcal/day`}
             icon={<Utensils size={18} color="#F59E0B" />}
             bg="#FFFBEB"
             onPress={() => router.push("/meal-log")}
           />
 
           <QuickLink
-            label="Log nước uống"
-            sub={`${weeklyWaterL.toFixed(1)}L tuần này`}
+            label="Water Log"
+            sub={`${weeklyWaterL.toFixed(1)}L this week`}
             icon={<Droplets size={18} color="#3B82F6" />}
             bg="#EFF6FF"
             onPress={() => router.push("/water-log")}
           />
 
           <QuickLink
-            label="Theo dõi cân nặng"
+            label="Weight Tracking"
             sub={
               latestWeight != null
-                ? `${latestWeight.toFixed(1)} kg hiện tại`
-                : "Chưa có dữ liệu"
+                ? `${latestWeight.toFixed(1)} kg current`
+                : "No data yet"
             }
             icon={<Scale size={18} color="#8B5CF6" />}
             bg="#F5F3FF"
