@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -20,11 +20,101 @@ import {
   X,
   Trophy,
 } from "lucide-react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+
+import { useAuth } from "@/context/AuthContext";
+import { getDailyMacros } from "@/lib/repositories/mealRepository";
+
+import { getLocalDateKey } from "@/lib/dateUtils";
+
+const DAILY_CALORIE_GOAL = 2000;
+const PROTEIN_GOAL = 120;
+const CARBS_GOAL = 250;
+const FAT_GOAL = 65;
+
+type DailyMacros = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
+
+const EMPTY_DAILY_MACROS: DailyMacros = {
+  calories: 0,
+  protein: 0,
+  carbs: 0,
+  fat: 0,
+};
+
+function getTodayKey() {
+  return getLocalDateKey();
+}
+
+function getNumericUserId(value: unknown) {
+  const numeric = Number(value);
+
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return numeric;
+  }
+
+  return 1;
+}
+
+function formatMacroValue(value: number, goal: number) {
+  return `${Math.round(value)} / ${goal}g`;
+}
 
 export default function HomeScreen() {
+  const { user } = useAuth();
+
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weight, setWeight] = useState("68.5");
+  const [dailyMacros, setDailyMacros] =
+    useState<DailyMacros>(EMPTY_DAILY_MACROS);
+
+  const userId = useMemo(() => getNumericUserId(user?.id), [user?.id]);
+
+  const displayName = useMemo(() => {
+    const rawName = user?.display_name || user?.email?.split("@")[0] || "there";
+
+    return rawName.trim() || "there";
+  }, [user?.display_name, user?.email]);
+
+  const calorieProgress = Math.min(
+    dailyMacros.calories / DAILY_CALORIE_GOAL,
+    1
+  );
+
+  const onTrack =
+    dailyMacros.calories > 0 && dailyMacros.calories <= DAILY_CALORIE_GOAL;
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function loadTodayMacros() {
+        try {
+          const macros = await getDailyMacros(userId, getTodayKey());
+
+          if (!isActive) return;
+
+          setDailyMacros(macros);
+        } catch (error) {
+          console.warn("[HomeScreen] Failed to load daily macros:", error);
+
+          if (!isActive) return;
+
+          setDailyMacros(EMPTY_DAILY_MACROS);
+        }
+      }
+
+      loadTodayMacros();
+
+      return () => {
+        isActive = false;
+      };
+    }, [userId])
+  );
 
   return (
     <View style={styles.container}>
@@ -36,7 +126,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.hello}>Hello,</Text>
-            <Text style={styles.name}>Linh 👋</Text>
+            <Text style={styles.name}>{displayName} 👋</Text>
             <Text style={styles.sub}>Let’s make today amazing</Text>
           </View>
 
@@ -50,21 +140,63 @@ export default function HomeScreen() {
           <Text style={styles.cardTitle}>Daily Summary</Text>
 
           <View style={styles.summaryRow}>
-            {/* vòng progress */}
-            <View style={styles.progressCircle}>
-              <Text style={styles.kcal}>1350</Text>
-              <Text style={styles.kcalSub}>/ 2000 kcal</Text>
+            {/* progress circle */}
+            <View
+              style={[
+                styles.progressCircle,
+                {
+                  borderColor:
+                    dailyMacros.calories > DAILY_CALORIE_GOAL
+                      ? "#EF4444"
+                      : "#10B981",
+                  opacity: dailyMacros.calories > 0 ? 1 : 0.55,
+                },
+              ]}
+            >
+              <Text style={styles.kcal}>{Math.round(dailyMacros.calories)}</Text>
+              <Text style={styles.kcalSub}>/ {DAILY_CALORIE_GOAL} kcal</Text>
+              <Text style={styles.kcalPercent}>
+                {Math.round(calorieProgress * 100)}%
+              </Text>
             </View>
 
             <View style={styles.macroWrap}>
-              <Macro label="Protein" value="75 / 120g" color="#8B5CF6" />
-              <Macro label="Carbs" value="160 / 250g" color="#06B6D4" />
-              <Macro label="Fat" value="45 / 65g" color="#F59E0B" />
+              <Macro
+                label="Protein"
+                value={formatMacroValue(dailyMacros.protein, PROTEIN_GOAL)}
+                color="#8B5CF6"
+              />
+              <Macro
+                label="Carbs"
+                value={formatMacroValue(dailyMacros.carbs, CARBS_GOAL)}
+                color="#06B6D4"
+              />
+              <Macro
+                label="Fat"
+                value={formatMacroValue(dailyMacros.fat, FAT_GOAL)}
+                color="#F59E0B"
+              />
             </View>
           </View>
 
-          <View style={styles.trackBox}>
-            <Text style={styles.trackText}>💚 You’re on track! Keep it up</Text>
+          <View
+            style={[
+              styles.trackBox,
+              dailyMacros.calories > DAILY_CALORIE_GOAL && styles.warningBox,
+            ]}
+          >
+            <Text
+              style={[
+                styles.trackText,
+                dailyMacros.calories > DAILY_CALORIE_GOAL && styles.warningText,
+              ]}
+            >
+              {dailyMacros.calories <= 0
+                ? "🍽️ Log your first meal to start tracking"
+                : onTrack
+                  ? "💚 You’re on track! Keep it up"
+                  : "🔥 You’re over today’s calorie goal"}
+            </Text>
           </View>
         </View>
 
@@ -191,6 +323,7 @@ export default function HomeScreen() {
             </View>
           </View>
         </TouchableOpacity>
+
         {/* ACTIVE CHALLENGE */}
         <TouchableOpacity
           activeOpacity={0.9}
@@ -206,6 +339,7 @@ export default function HomeScreen() {
             </View>
           </View>
         </TouchableOpacity>
+
         {/* AI INSIGHT */}
         <View style={styles.insightCard}>
           <Text style={styles.insightBadge}>AI Insight</Text>
@@ -370,6 +504,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+  kcalPercent: {
+    marginTop: 4,
+    color: "#94A3B8",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
   macroWrap: {
     justifyContent: "space-around",
   },
@@ -404,10 +545,18 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
 
+  warningBox: {
+    backgroundColor: "#FEF2F2",
+  },
+
   trackText: {
     textAlign: "center",
     color: "#10B981",
     fontWeight: "600",
+  },
+
+  warningText: {
+    color: "#EF4444",
   },
 
   missionHeader: {
