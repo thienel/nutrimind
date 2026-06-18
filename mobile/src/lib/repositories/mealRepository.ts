@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { enqueue } from "@/lib/repositories/syncQueue";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "other";
 
@@ -111,6 +112,17 @@ export async function insertMeal(data: InsertMealData): Promise<string> {
 
   await writeMeals(meals);
 
+  await enqueue("create", "meal", id, {
+    local_id: id,
+    name: meal.name,
+    calories: meal.calories,
+    proteinG: meal.protein_g,
+    carbsG: meal.carbs_g,
+    fatG: meal.fat_g,
+    mealType: meal.meal_type,
+    loggedAt: meal.logged_at,
+  });
+
   return id;
 }
 
@@ -170,6 +182,8 @@ export async function deleteMeal(
   });
 
   await writeMeals(updatedMeals);
+
+  await enqueue("delete", "meal", id, { local_id: id });
 }
 
 export async function getDailyCalories(
@@ -240,4 +254,21 @@ export async function getDailyCalorieHistory(
   }
 
   return result;
+}
+
+export async function getMealServerId(localId: string): Promise<string | null> {
+  const meals = await readMeals();
+  const found = meals.find((m) => m.id === localId);
+  return found?.server_id ?? null;
+}
+
+export async function updateMealServerId(
+  localId: string,
+  serverId: string
+): Promise<void> {
+  const meals = await readMeals();
+  const updated = meals.map((m) =>
+    m.id === localId ? { ...m, server_id: serverId } : m
+  );
+  await writeMeals(updated);
 }

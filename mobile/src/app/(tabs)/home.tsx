@@ -111,26 +111,31 @@ export default function HomeScreen() {
         </View>
 
         {/* WEIGHT */}
-        <View style={styles.card}>
-          <View style={styles.weightTop}>
-            <View>
-              <Text style={styles.weightLabel}>Weekly Weight Check</Text>
-              <Text style={styles.weight}>{weight} kg</Text>
-              <Text style={styles.weightSub}>Last updated 7 days ago</Text>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => router.push("/weight-log")}
+        >
+          <View style={styles.card}>
+            <View style={styles.weightTop}>
+              <View>
+                <Text style={styles.weightLabel}>Weekly Weight Check</Text>
+                <Text style={styles.weight}>{weight} kg</Text>
+                <Text style={styles.weightSub}>Last updated 7 days ago</Text>
+              </View>
+
+              <View style={styles.weightIcon}>
+                <Scale size={22} color="#155E75" />
+              </View>
             </View>
 
-            <View style={styles.weightIcon}>
-              <Scale size={22} color="#155E75" />
-            </View>
+            <TouchableOpacity
+              style={styles.weightBtn}
+              onPress={() => router.push("/weight-log")}
+            >
+              <Text style={styles.weightBtnText}>Update Weight</Text>
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.weightBtn}
-            onPress={() => setShowWeightModal(true)}
-          >
-            <Text style={styles.weightBtnText}>Update Weight</Text>
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
 
         {/* QUICK ACTIONS */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -140,24 +145,28 @@ export default function HomeScreen() {
             icon={<Plus size={20} color="white" />}
             title="Log Meal"
             color="#10B981"
+            onPress={() => router.push("/meal-log")}
           />
 
           <QuickAction
             icon={<Droplets size={20} color="white" />}
             title="Water"
             color="#06B6D4"
+            onPress={() => router.push("/water-log")}
           />
 
           <QuickAction
             icon={<BrainCircuit size={20} color="white" />}
             title="AI Coach"
             color="#8B5CF6"
+            onPress={() => router.push("/coach")}
           />
 
           <QuickAction
             icon={<ChartColumn size={20} color="white" />}
             title="Report"
             color="#EC4899"
+            onPress={() => router.push("/progress")}
           />
         </View>
 
@@ -269,9 +278,9 @@ function Mission({ text, done = false }: any) {
   );
 }
 
-function QuickAction({ icon, title, color }: any) {
+function QuickAction({ icon, title, color, onPress }: any) {
   return (
-    <TouchableOpacity style={styles.quickActionCard}>
+    <TouchableOpacity style={styles.quickActionCard} onPress={onPress}>
       <View style={[styles.quickIcon, { backgroundColor: color }]}>{icon}</View>
       <Text style={styles.quickText}>{title}</Text>
     </TouchableOpacity>

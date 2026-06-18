@@ -33,11 +33,15 @@ export async function logWeight(data: InsertWeightData): Promise<string> {
   const db = await getDb();
   const id = generateUUID();
   const loggedAt = data.loggedAt ?? new Date().toISOString();
+  const loggedDate = loggedAt.slice(0, 10);
+  const now = new Date().toISOString();
 
   await db.runAsync(
-    `INSERT INTO weight_logs (id, user_id, weight_kg, note, logged_at)
-     VALUES (?, ?, ?, ?, ?);`,
-    [id, data.userId, data.weightKg, data.note ?? null, loggedAt]
+    `INSERT INTO local_weight_entries (
+      local_id, server_id, user_id, weight_kg, logged_date, note,
+      client_created_at, sync_status, sync_attempts, last_sync_error, created_at
+    ) VALUES (?, NULL, ?, ?, ?, ?, ?, 'pending', 0, NULL, ?);`,
+    [id, data.userId, data.weightKg, loggedDate, data.note ?? null, loggedAt, now]
   );
 
   await enqueue("create", "weight", id, {
@@ -59,13 +63,24 @@ export async function getWeightHistory(
   offset = 0
 ): Promise<WeightLog[]> {
   const db = await getDb();
-  return db.getAllAsync<WeightLog>(
-    `SELECT * FROM weight_logs
-     WHERE user_id = ? AND is_deleted = 0
-     ORDER BY logged_at DESC
+  const rows = await db.getAllAsync<any>(
+    `SELECT * FROM local_weight_entries
+     WHERE user_id = ? AND sync_status != 'deleted_pending'
+     ORDER BY client_created_at DESC
      LIMIT ? OFFSET ?;`,
     [userId, limit, offset]
   );
+
+  return rows.map((r) => ({
+    id: r.local_id,
+    user_id: r.user_id,
+    weight_kg: r.weight_kg,
+    note: r.note,
+    logged_at: r.client_created_at,
+    created_at: r.created_at,
+    is_deleted: r.sync_status === "deleted_pending" ? 1 : 0,
+    server_id: r.server_id ? String(r.server_id) : null,
+  }));
 }
 
 /**
@@ -75,13 +90,26 @@ export async function getLatestWeight(
   userId: number
 ): Promise<WeightLog | null> {
   const db = await getDb();
-  return db.getFirstAsync<WeightLog>(
-    `SELECT * FROM weight_logs
-     WHERE user_id = ? AND is_deleted = 0
-     ORDER BY logged_at DESC
+  const r = await db.getFirstAsync<any>(
+    `SELECT * FROM local_weight_entries
+     WHERE user_id = ? AND sync_status != 'deleted_pending'
+     ORDER BY client_created_at DESC
      LIMIT 1;`,
     [userId]
   );
+
+  if (!r) return null;
+
+  return {
+    id: r.local_id,
+    user_id: r.user_id,
+    weight_kg: r.weight_kg,
+    note: r.note,
+    logged_at: r.client_created_at,
+    created_at: r.created_at,
+    is_deleted: r.sync_status === "deleted_pending" ? 1 : 0,
+    server_id: r.server_id ? String(r.server_id) : null,
+  };
 }
 
 /**
@@ -92,15 +120,14 @@ export async function getWeightChartData(
   days = 30
 ): Promise<{ date: string; weight_kg: number }[]> {
   const db = await getDb();
-  // Lấy giá trị cuối cùng trong ngày (ghi nhiều lần thì lấy cái cuối)
   return db.getAllAsync<{ date: string; weight_kg: number }>(
-    `SELECT date(logged_at) as date, weight_kg
-     FROM weight_logs
+    `SELECT logged_date as date, weight_kg
+     FROM local_weight_entries
      WHERE user_id = ?
-       AND is_deleted = 0
-       AND logged_at >= datetime('now', ? || ' days')
-     GROUP BY date(logged_at)
-     HAVING logged_at = MAX(logged_at)
+       AND sync_status != 'deleted_pending'
+       AND client_created_at >= datetime('now', ? || ' days')
+     GROUP BY logged_date
+     HAVING client_created_at = MAX(client_created_at)
      ORDER BY date ASC;`,
     [userId, -days]
   );
@@ -113,8 +140,11 @@ export async function deleteWeightLog(
 ): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE weight_logs SET is_deleted = 1 WHERE id = ? AND user_id = ?;`,
+    `UPDATE local_weight_entries
+     SET sync_status = 'deleted_pending'
+     WHERE local_id = ? AND user_id = ?;`,
     [id, userId]
   );
   await enqueue("delete", "weight", id, { local_id: id });
 }
+

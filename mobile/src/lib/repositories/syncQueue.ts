@@ -5,20 +5,20 @@
  * SyncManager sẽ drain queue khi mạng trở lại.
  */
 
-import { getDb } from "@/lib/db";
+import { getDb, generateUUID } from "@/lib/db";
 
 export type SyncAction = "create" | "update" | "delete";
 export type SyncEntity = "meal" | "water" | "weight";
 export type SyncStatus = "pending" | "synced" | "failed";
 
 export interface SyncQueueItem {
-  id: number;
-  action: SyncAction;
-  entity: SyncEntity;
+  id: string; // Map from TEXT id (UUID)
+  action: SyncAction; // Maps to operation
+  entity: SyncEntity; // Maps to entity_type
   local_id: string;
   payload: string; // JSON string
   status: SyncStatus;
-  retries: number;
+  retries: number; // Maps to attempts
   created_at: string;
   synced_at: string | null;
 }
@@ -31,40 +31,53 @@ export async function enqueue(
   payload: Record<string, unknown>
 ): Promise<void> {
   const db = await getDb();
+  const id = generateUUID();
+  const now = new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO sync_queue (action, entity, local_id, payload, status)
-     VALUES (?, ?, ?, ?, 'pending');`,
-    [action, entity, localId, JSON.stringify(payload)]
+    `INSERT INTO sync_queue (id, operation, entity_type, local_id, payload, status, attempts, max_attempts, created_at)
+     VALUES (?, ?, ?, ?, ?, 'pending', 0, 3, ?);`,
+    [id, action, entity, localId, JSON.stringify(payload), now]
   );
 }
 
 /** Lấy tất cả items đang pending (chưa sync, hoặc thất bại dưới 3 lần) */
 export async function getPending(): Promise<SyncQueueItem[]> {
   const db = await getDb();
-  return db.getAllAsync<SyncQueueItem>(
+  const rows = await db.getAllAsync<any>(
     `SELECT * FROM sync_queue
-     WHERE status = 'pending' OR (status = 'failed' AND retries < 3)
+     WHERE status = 'pending' OR (status = 'failed' AND attempts < 3)
      ORDER BY created_at ASC;`
   );
+  return rows.map((r) => ({
+    id: r.id,
+    action: r.operation as SyncAction,
+    entity: r.entity_type as SyncEntity,
+    local_id: r.local_id,
+    payload: r.payload,
+    status: r.status as SyncStatus,
+    retries: r.attempts,
+    created_at: r.created_at,
+    synced_at: null,
+  }));
 }
 
 /** Đánh dấu item đã sync thành công */
-export async function markSynced(id: number): Promise<void> {
+export async function markSynced(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `UPDATE sync_queue
-     SET status = 'synced', synced_at = datetime('now')
+     SET status = 'synced'
      WHERE id = ?;`,
     [id]
   );
 }
 
 /** Đánh dấu item thất bại, tăng retry counter */
-export async function markFailed(id: number): Promise<void> {
+export async function markFailed(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `UPDATE sync_queue
-     SET status = 'failed', retries = retries + 1
+     SET status = 'failed', attempts = attempts + 1
      WHERE id = ?;`,
     [id]
   );
@@ -84,3 +97,4 @@ export async function countPending(): Promise<number> {
   );
   return row?.count ?? 0;
 }
+
