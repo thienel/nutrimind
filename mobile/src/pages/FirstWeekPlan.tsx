@@ -1,35 +1,90 @@
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { CircleCheck, Target } from "lucide-react-native";
 
+import { getMyProfile } from "@/services/profileService";
+
+type PlanData = {
+  calorie_target: number;
+  water_target_ml: number;
+};
+
 export function FirstWeekPlan() {
+  const [plan, setPlan] = useState<PlanData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // fetch profile khi mở màn
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await getMyProfile();
+
+      setPlan({
+        calorie_target: res.calorie_target,
+        water_target_ml: res.water_target_ml,
+      });
+    } catch (error) {
+      console.log("Lỗi fetch profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // loading
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#10B981" />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
+        {/* icon */}
         <View style={styles.iconCircle}>
           <Target size={56} color="#10B981" />
         </View>
 
+        {/* tiêu đề */}
         <Text style={styles.title}>Your First Week Plan</Text>
 
         <Text style={styles.subtitle}>
           Follow these daily habits to achieve your goal.
         </Text>
 
+        {/* plan card */}
         <View style={styles.card}>
-          <PlanItem text="Drink 2L water every day" />
+          {/* water target từ backend */}
+          <PlanItem
+            text={`Drink ${(plan?.water_target_ml ?? 0) / 1000}L water every day`}
+          />
 
-          <PlanItem text="Stay under 1800 kcal per day" />
+          {/* calorie target từ backend */}
+          <PlanItem
+            text={`Stay under ${Math.round(plan?.calorie_target ?? 0)} kcal/day`}
+          />
 
+          {/* hardcode thêm */}
           <PlanItem text="Log at least 3 meals daily" />
-
           <PlanItem text="Walk 8,000 steps daily" />
-
           <PlanItem text="Update weight every Sunday" />
         </View>
       </View>
 
+      {/* nút vào home */}
       <Pressable style={styles.button} onPress={() => router.replace("/home")}>
         <Text style={styles.buttonText}>Start My Journey</Text>
       </Pressable>
@@ -41,7 +96,6 @@ function PlanItem({ text }: { text: string }) {
   return (
     <View style={styles.planRow}>
       <CircleCheck size={20} color="#10B981" />
-
       <Text style={styles.planText}>{text}</Text>
     </View>
   );
@@ -52,6 +106,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F7F9F8",
     paddingHorizontal: 24,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   content: {

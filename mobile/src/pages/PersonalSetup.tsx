@@ -5,16 +5,66 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
+import { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function PersonalSetup() {
+  // state step 1
+  const [age, setAge] = useState("");
+  const [gender, setGender] = useState<"MALE" | "FEMALE">("MALE");
+  const [height, setHeight] = useState("");
+  const [weight, setWeight] = useState("");
+
+  // validate dữ liệu step 1
+  const validate = () => {
+    if (!age || !height || !weight) {
+      Alert.alert("Validation Error", "Please fill all fields");
+      return false;
+    }
+
+    if (+age < 10 || +age > 120) {
+      Alert.alert("Validation Error", "Age must be 10 - 120");
+      return false;
+    }
+
+    if (+height < 50 || +height > 300) {
+      Alert.alert("Validation Error", "Height must be 50 - 300 cm");
+      return false;
+    }
+
+    if (+weight < 15 || +weight > 500) {
+      Alert.alert("Validation Error", "Weight must be 15 - 500 kg");
+      return false;
+    }
+
+    return true;
+  };
+
+  // lưu step 1 vào AsyncStorage
+  const handleContinue = async () => {
+    if (!validate()) return;
+
+    const payload = {
+      age,
+      gender,
+      height,
+      weight,
+    };
+
+    await AsyncStorage.setItem("onboarding_step_1", JSON.stringify(payload));
+
+    router.push("/health-profile");
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Progress */}
+        {/* Header progress */}
         <View style={styles.progressHeader}>
           <Pressable onPress={() => router.back()}>
             <ChevronLeft size={22} />
@@ -23,28 +73,63 @@ export function PersonalSetup() {
           <Text style={styles.stepText}>1 of 2</Text>
         </View>
 
+        {/* Progress bar */}
         <View style={styles.progressBg}>
           <View style={styles.progressHalf} />
         </View>
 
+        {/* Title */}
         <Text style={styles.title}>Tell us about you</Text>
-
         <Text style={styles.subtitle}>Help us personalize your goals.</Text>
 
-        <Input label="Age" placeholder="21" />
+        {/* Age */}
+        <Input label="Age" placeholder="Ex: 21" value={age} onChange={setAge} />
 
-        <Input label="Gender" placeholder="Male" />
+        {/* Gender */}
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label}>Gender</Text>
 
-        <Input label="Height (cm)" placeholder="175" />
+          <View style={styles.optionRow}>
+            {["MALE", "FEMALE"].map((item) => (
+              <Pressable
+                key={item}
+                style={[
+                  styles.optionBtn,
+                  gender === item && styles.optionBtnActive,
+                ]}
+                onPress={() => setGender(item as "MALE" | "FEMALE")}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    gender === item && styles.optionTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
 
-        <Input label="Weight (kg)" placeholder="65" />
+        {/* Height */}
+        <Input
+          label="Height (cm)"
+          placeholder="Ex: 175"
+          value={height}
+          onChange={setHeight}
+        />
 
-        <Input label="Goal Weight" placeholder="60" />
+        {/* Weight */}
+        <Input
+          label="Weight (kg)"
+          placeholder="Ex: 68"
+          value={weight}
+          onChange={setWeight}
+        />
 
-        <Pressable
-          style={styles.button}
-          onPress={() => router.push("/health-profile")}
-        >
+        {/* Continue */}
+        <Pressable style={styles.button} onPress={handleContinue}>
           <Text style={styles.buttonText}>Continue</Text>
         </Pressable>
       </ScrollView>
@@ -52,12 +137,25 @@ export function PersonalSetup() {
   );
 }
 
-function Input({ label, placeholder }: { label: string; placeholder: string }) {
+// component input dùng chung
+function Input({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
   return (
-    <View style={{ marginBottom: 20 }}>
+    <View style={styles.inputWrapper}>
       <Text style={styles.label}>{label}</Text>
 
       <TextInput
+        value={value}
+        onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor="#94A3B8"
         style={styles.input}
@@ -110,6 +208,10 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
 
+  inputWrapper: {
+    marginBottom: 20,
+  },
+
   label: {
     marginBottom: 8,
     color: "#334155",
@@ -121,6 +223,38 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 22,
     paddingHorizontal: 18,
+    fontSize: 15,
+    color: "#0F172A",
+  },
+
+  optionRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+
+  optionBtn: {
+    flex: 1,
+    height: 56,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  optionBtnActive: {
+    backgroundColor: "#10B981",
+    borderColor: "#10B981",
+  },
+
+  optionText: {
+    color: "#64748B",
+    fontWeight: "600",
+  },
+
+  optionTextActive: {
+    color: "#FFFFFF",
   },
 
   button: {
@@ -130,6 +264,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#10B981",
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 30,
   },
 
   buttonText: {
