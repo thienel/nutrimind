@@ -17,7 +17,8 @@ import NetInfo, {
   NetInfoState,
   NetInfoSubscription,
 } from "@react-native-community/netinfo";
-import { startSync } from "@/lib/syncManager";
+import { useSQLiteContext } from "expo-sqlite";
+import { SyncService } from "@/services/sync.service";
 
 interface NetworkContextValue {
   /** true nếu thiết bị đang có kết nối internet */
@@ -45,6 +46,7 @@ interface NetworkProviderProps {
 }
 
 export function NetworkProvider({ children, userId }: NetworkProviderProps) {
+  const db = useSQLiteContext();
   const [isOnline, setIsOnline] = useState(true);
   const [connectionType, setConnectionType] = useState("unknown");
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
@@ -57,12 +59,14 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
     if (isSyncing.current || !userId) return;
     isSyncing.current = true;
     try {
-      const remaining = await startSync(userId);
+      const syncService = new SyncService(db);
+      await syncService.runSync();
+      const remaining = await syncService.getPendingCount();
       setPendingSyncCount(remaining);
     } finally {
       isSyncing.current = false;
     }
-  }, [userId]);
+  }, [userId, db]);
 
   useEffect(() => {
     // Lấy trạng thái ban đầu

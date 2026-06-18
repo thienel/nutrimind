@@ -11,6 +11,10 @@ import { ToastProvider } from "@/components/ToastProvider";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { NetworkProvider } from "@/context/NetworkContext";
 import { DatabaseManager, DB_NAME } from "../db/database";
+import { initGoogleSignIn } from "@/lib/googleSignIn";
+
+// Khởi tạo Google Sign In một lần duy nhất khi app khởi động
+initGoogleSignIn();
 
 function AppWithProviders() {
   const { user } = useAuth();

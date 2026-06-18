@@ -1,4 +1,3 @@
-
 import React, {
   createContext,
   useCallback,
@@ -12,7 +11,9 @@ import { router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 
 import { api, registerForceSignOut } from "@/lib/apiClient";
+import { useSQLiteContext } from "expo-sqlite";
 import { getGoogleIdToken, googleSignOutLocal } from "@/lib/googleSignIn";
+import { pullInitialData } from "@/services/initialData.service";
 import {
   clearTokens,
   getAppToken,
@@ -116,6 +117,7 @@ function isTokenFresh(token: string): boolean {
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const db = useSQLiteContext();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -134,15 +136,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Navigation sau auth ──────────────────────────────────────────────────
   const navigateAfterAuth = useCallback(
-    async (isFirstLogin: boolean) => {
+    async (isFirstLogin: boolean, userId?: number) => {
       if (isFirstLogin) {
         router.replace("/welcome-setup");
         return;
       }
 
-      // Pull profile từ server (spec §2.8) — nếu 403 ONBOARDING_REQUIRED → onboarding
+      // Pull initial data từ server (spec §2.8) — nếu 403 ONBOARDING_REQUIRED → onboarding
       try {
-        await api.get("/profile");
+        if (userId) {
+          await pullInitialData(db, userId);
+        } else {
+          await api.get("/profile");
+        }
         router.replace("/(tabs)/home");
       } catch (err: unknown) {
         const e = err as { status?: number };
@@ -154,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    []
+    [db]
   );
 
   // ── Force sign-out (spec §2.9) ────────────────────────────────────────────
@@ -204,9 +210,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const profile = await api.get<UserProfile>("/auth/me");
             setUser(profile);
-            // Kiểm tra onboarding
+            // Kiểm tra onboarding & pull initial data
             try {
-              await api.get("/profile");
+              await pullInitialData(db, profile.id);
               router.replace("/(tabs)/home");
             } catch (err: unknown) {
               const e = err as { status?: number };
@@ -243,12 +249,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             refreshExpiresIn: resp.refresh_expires_in,
           });
 
-          // Sau refresh thành công → pull profile
+          // Sau refresh thành công → pull initial data
           const profile = await api.get<UserProfile>("/auth/me");
           setUser(profile);
 
           try {
-            await api.get("/profile");
+            await pullInitialData(db, profile.id);
             router.replace("/(tabs)/home");
           } catch (err: unknown) {
             const e = err as { status?: number };
@@ -278,7 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
       await persistAuth(resp);
-      await navigateAfterAuth(resp.is_first_login);
+      await navigateAfterAuth(resp.is_first_login, resp.user.id);
     },
     [persistAuth, navigateAfterAuth]
   );
@@ -307,11 +313,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       id_token: idToken,
     });
     await persistAuth(resp);
-    await navigateAfterAuth(resp.is_first_login);
+    await navigateAfterAuth(resp.is_first_login, resp.user.id);
   }, [persistAuth, navigateAfterAuth]);
 
   // ── Manual Sign-Out (spec §2.10) ──────────────────────────────────────────
   const signOut = useCallback(async () => {
+    // Kiểm tra sync_queue (spec §2.10)
+    try {
+      const result = await db.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) as count FROM sync_queue WHERE status IN ('pending', 'failed')"
+      );
+      
+      if (result && result.count > 0) {
+        return new Promise<void>((resolve) => {
+          Alert.alert(
+            "Chưa đồng bộ",
+            `Bạn còn ${result.count} mục chưa được đồng bộ.\nNếu đăng xuất ngay, dữ liệu này sẽ bị mất.`,
+            [
+              { text: "Đồng bộ rồi đăng xuất", style: "default", onPress: () => {
+                // Sẽ kích hoạt sync (được quản lý bởi NetworkContext) rồi user bấm sign out lại
+                // Hoặc nếu muốn force sync ở đây thì cần inject SyncService
+                // Tạm thời chỉ dismiss dialog
+                resolve();
+              } },
+              { text: "Đăng xuất ngay", style: "destructive", onPress: () => performSignOut().then(resolve) }
+            ]
+          );
+        });
+      }
+    } catch {
+      // Bỏ qua lỗi db
+    }
+
+    await performSignOut();
+  }, [db]);
+
+  const performSignOut = useCallback(async () => {
     const currentUser = user;
     const refreshToken = await getRefreshToken();
     const appToken = await getAppToken();

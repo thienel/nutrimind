@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { ALL_DDL } from './schema';
 
-export const DB_NAME = 'nutrimind.db';
+export const DB_NAME = 'nutrimind_v2.db';
 
 /**
  * DatabaseManager — handles schema initialization.
@@ -19,6 +19,8 @@ export class DatabaseManager {
 
     // Run all DDL in one transaction
     await db.withTransactionAsync(async () => {
+      // Force drop sync_queue to avoid any schema mismatch with next_retry_at during dev
+      await db.execAsync('DROP TABLE IF EXISTS sync_queue;');
       for (const sql of ALL_DDL) {
         await db.execAsync(sql);
       }
