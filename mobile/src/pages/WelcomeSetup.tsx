@@ -11,16 +11,14 @@ export function WelcomeSetup() {
           <Sparkles size={56} color="#10B981" />
         </View>
 
-        <Text style={styles.title}>
-          Let's personalize{"\n"}
-          your journey ✨
-        </Text>
+        <Text style={styles.title}>Let's personalize{"\n"}your journey ✨</Text>
 
         <Text style={styles.subtitle}>
           We'll create a nutrition plan based on your body and goals.
         </Text>
       </View>
 
+      {/* sang bước nhập body info */}
       <Pressable
         style={styles.button}
         onPress={() => router.push("/personal-setup")}
@@ -32,18 +30,8 @@ export function WelcomeSetup() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F7F9F8",
-    paddingHorizontal: 24,
-  },
-
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
+  container: { flex: 1, backgroundColor: "#F7F9F8", paddingHorizontal: 24 },
+  content: { flex: 1, justifyContent: "center", alignItems: "center" },
   iconCircle: {
     width: 140,
     height: 140,
@@ -52,7 +40,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   title: {
     marginTop: 36,
     textAlign: "center",
@@ -60,7 +47,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0F172A",
   },
-
   subtitle: {
     textAlign: "center",
     color: "#64748B",
@@ -68,7 +54,6 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     maxWidth: 280,
   },
-
   button: {
     height: 58,
     borderRadius: 999,
@@ -77,10 +62,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-
-  buttonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
+  buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 });

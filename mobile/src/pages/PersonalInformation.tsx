@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-
 import {
   Alert,
   Pressable,
@@ -8,124 +7,85 @@ import {
   Text,
   TextInput,
   View,
+  KeyboardTypeOptions,
 } from "react-native";
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { getMyProfile, updateProfile } from "@/services/profileService";
+
 export function PersonalInformation() {
-  const [fullName, setFullName] = useState("");
-
-  const [email, setEmail] = useState("");
-
+  // state profile
   const [age, setAge] = useState("");
-
-  const [gender, setGender] = useState("");
-
   const [height, setHeight] = useState("");
-
   const [weight, setWeight] = useState("");
 
-  const [goalWeight, setGoalWeight] = useState("");
+  const [gender, setGender] = useState<"MALE" | "FEMALE">("MALE");
 
+  const [goal, setGoal] = useState<
+    "LOSE_WEIGHT" | "GAIN_MUSCLE" | "MAINTAIN" | "EAT_HEALTHIER"
+  >("LOSE_WEIGHT");
+
+  const [activityLevel, setActivityLevel] = useState<
+    "SEDENTARY" | "LIGHTLY_ACTIVE" | "MODERATELY_ACTIVE" | "VERY_ACTIVE"
+  >("MODERATELY_ACTIVE");
+
+  // fetch profile khi mở màn
   useEffect(() => {
     loadProfile();
   }, []);
 
+  // lấy profile từ backend
   const loadProfile = async () => {
     try {
-      const saved = await AsyncStorage.getItem("profile");
+      const profile = await getMyProfile();
 
-      if (!saved) {
-        setFullName("John Doe");
-        setEmail("john@email.com");
-        setAge("21");
-        setGender("Male");
-        setHeight("175");
-        setWeight("65");
-        setGoalWeight("60");
-        return;
-      }
-
-      const data = JSON.parse(saved);
-
-      setFullName(data.fullName || "");
-      setEmail(data.email || "");
-      setAge(data.age || "");
-      setGender(data.gender || "");
-      setHeight(data.height || "");
-      setWeight(data.weight || "");
-      setGoalWeight(data.goalWeight || "");
+      setAge(String(profile.age));
+      setGender(profile.gender);
+      setHeight(String(profile.height_cm));
+      setWeight(String(profile.weight_kg));
+      setGoal(profile.goal);
+      setActivityLevel(profile.activity_level);
     } catch (error) {
       console.log(error);
     }
   };
 
+  // validate dữ liệu
   const validate = () => {
-    if (!fullName.trim()) {
-      Alert.alert("Validation Error", "Full name is required");
-      return false;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!emailRegex.test(email)) {
-      Alert.alert("Validation Error", "Invalid email address");
-      return false;
-    }
-
-    if (+age < 10 || +age > 100) {
-      Alert.alert("Validation Error", "Age must be between 10 and 100");
-      return false;
-    }
-
-    if (+height < 100 || +height > 250) {
-      Alert.alert("Validation Error", "Height must be between 100 and 250 cm");
-      return false;
-    }
-
-    if (+weight < 20 || +weight > 300) {
-      Alert.alert("Validation Error", "Weight must be between 20 and 300 kg");
-      return false;
-    }
-
-    if (+goalWeight < 20 || +goalWeight > 300) {
-      Alert.alert(
-        "Validation Error",
-        "Goal weight must be between 20 and 300 kg",
-      );
+    if (!age || !height || !weight) {
+      Alert.alert("Validation Error", "Please fill all required fields");
       return false;
     }
 
     return true;
   };
 
+  // update profile
   const handleSave = async () => {
     if (!validate()) return;
 
     try {
-      const profileData = {
-        fullName,
-        email,
-        age,
+      await updateProfile({
+        age: Number(age),
         gender,
-        height,
-        weight,
-        goalWeight,
-      };
-
-      await AsyncStorage.setItem("profile", JSON.stringify(profileData));
+        height_cm: Number(height),
+        weight_kg: Number(weight),
+        goal,
+        activity_level: activityLevel,
+      });
 
       Alert.alert("Success", "Profile updated successfully", [
         {
           text: "OK",
-          onPress: () => router.replace("/profile"),
+          onPress: () => router.back(),
         },
       ]);
     } catch (error) {
       console.log(error);
+      Alert.alert("Error", "Cannot update profile");
     }
   };
 
@@ -141,56 +101,79 @@ export function PersonalInformation() {
           <Text style={styles.title}>Personal Information</Text>
         </View>
 
+        {/* Age */}
         <InputField
-          label="Full Name"
-          value={fullName}
-          onChangeText={setFullName}
-        />
-
-        <InputField label="Email" value={email} onChangeText={setEmail} />
-
-        <View style={styles.row}>
-          <InputField
-            label="Age"
-            value={age}
-            onChangeText={setAge}
-            keyboardType="numeric"
-            half
-          />
-
-          <InputField
-            label="Gender"
-            value={gender}
-            onChangeText={setGender}
-            half
-          />
-        </View>
-
-        <View style={styles.row}>
-          <InputField
-            label="Height (cm)"
-            value={height}
-            onChangeText={setHeight}
-            keyboardType="numeric"
-            half
-          />
-
-          <InputField
-            label="Weight (kg)"
-            value={weight}
-            onChangeText={setWeight}
-            keyboardType="numeric"
-            half
-          />
-        </View>
-
-        <InputField
-          label="Goal Weight"
-          value={goalWeight}
-          onChangeText={setGoalWeight}
+          label="Age"
+          placeholder="Ex: 21"
+          value={age}
+          onChangeText={setAge}
           keyboardType="numeric"
         />
 
+        {/* Gender */}
+        <OptionGroup
+          label="Gender"
+          options={["MALE", "FEMALE"]}
+          selected={gender}
+          onSelect={(value) => setGender(value as "MALE" | "FEMALE")}
+        />
+
+        {/* Height */}
+        <InputField
+          label="Height (cm)"
+          placeholder="Ex: 175"
+          value={height}
+          onChangeText={setHeight}
+          keyboardType="numeric"
+        />
+
+        {/* Weight */}
+        <InputField
+          label="Weight (kg)"
+          placeholder="Ex: 68"
+          value={weight}
+          onChangeText={setWeight}
+          keyboardType="numeric"
+        />
+
+        {/* Goal */}
+        <OptionGroup
+          label="Goal"
+          options={["LOSE_WEIGHT", "GAIN_MUSCLE", "MAINTAIN", "EAT_HEALTHIER"]}
+          selected={goal}
+          onSelect={(value) =>
+            setGoal(
+              value as
+                | "LOSE_WEIGHT"
+                | "GAIN_MUSCLE"
+                | "MAINTAIN"
+                | "EAT_HEALTHIER",
+            )
+          }
+        />
+
+        {/* Activity */}
+        <OptionGroup
+          label="Activity Level"
+          options={[
+            "SEDENTARY",
+            "LIGHTLY_ACTIVE",
+            "MODERATELY_ACTIVE",
+            "VERY_ACTIVE",
+          ]}
+          selected={activityLevel}
+          onSelect={(value) =>
+            setActivityLevel(
+              value as
+                | "SEDENTARY"
+                | "LIGHTLY_ACTIVE"
+                | "MODERATELY_ACTIVE"
+                | "VERY_ACTIVE",
+            )
+          }
+        />
+
+        {/* Save */}
         <Pressable style={styles.saveBtn} onPress={handleSave}>
           <Text style={styles.saveText}>Save Changes</Text>
         </Pressable>
@@ -199,23 +182,73 @@ export function PersonalInformation() {
   );
 }
 
+// input dùng chung
 function InputField({
   label,
   value,
   onChangeText,
+  placeholder,
   keyboardType = "default",
-  half = false,
-}: any) {
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  keyboardType?: KeyboardTypeOptions;
+}) {
   return (
-    <View style={[styles.inputWrapper, half && { flex: 1 }]}>
+    <View style={styles.inputWrapper}>
       <Text style={styles.label}>{label}</Text>
 
       <TextInput
         value={value}
         onChangeText={onChangeText}
         keyboardType={keyboardType}
+        placeholder={placeholder}
+        placeholderTextColor="#94A3B8"
         style={styles.input}
       />
+    </View>
+  );
+}
+
+// group chọn option
+function OptionGroup({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  options: string[];
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <View style={styles.inputWrapper}>
+      <Text style={styles.label}>{label}</Text>
+
+      <View style={styles.optionWrap}>
+        {options.map((item) => (
+          <Pressable
+            key={item}
+            style={[
+              styles.optionBtn,
+              selected === item && styles.optionBtnActive,
+            ]}
+            onPress={() => onSelect(item)}
+          >
+            <Text
+              style={[
+                styles.optionText,
+                selected === item && styles.optionTextActive,
+              ]}
+            >
+              {item}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -231,6 +264,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 28,
+    marginTop: 10,
   },
 
   backBtn: {
@@ -250,7 +284,7 @@ const styles = StyleSheet.create({
   },
 
   inputWrapper: {
-    marginBottom: 18,
+    marginBottom: 20,
   },
 
   label: {
@@ -269,9 +303,34 @@ const styles = StyleSheet.create({
     color: "#0F172A",
   },
 
-  row: {
+  optionWrap: {
     flexDirection: "row",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: 10,
+  },
+
+  optionBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+
+  optionBtnActive: {
+    backgroundColor: "#10B981",
+    borderColor: "#10B981",
+  },
+
+  optionText: {
+    color: "#64748B",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+
+  optionTextActive: {
+    color: "#FFFFFF",
   },
 
   saveBtn: {
