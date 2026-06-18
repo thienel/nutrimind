@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { enqueue } from "@/lib/repositories/syncQueue";
+
+import { getLocalDateKey, toLocalDateKey } from "@/lib/dateUtils";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "other";
 
@@ -49,17 +50,11 @@ function normalizeUserId(userId: number): number {
 }
 
 function normalizeDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return getLocalDateKey(date);
 }
 
 function getDateOnly(value: string): string {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value.slice(0, 10);
-  }
-
-  return normalizeDate(date);
+  return toLocalDateKey(value);
 }
 
 async function readMeals(): Promise<MealEntry[]> {
@@ -112,17 +107,6 @@ export async function insertMeal(data: InsertMealData): Promise<string> {
 
   await writeMeals(meals);
 
-  await enqueue("create", "meal", id, {
-    local_id: id,
-    name: meal.name,
-    calories: meal.calories,
-    proteinG: meal.protein_g,
-    carbsG: meal.carbs_g,
-    fatG: meal.fat_g,
-    mealType: meal.meal_type,
-    loggedAt: meal.logged_at,
-  });
-
   return id;
 }
 
@@ -148,6 +132,7 @@ export async function getMealsByDate(
   date: string
 ): Promise<MealEntry[]> {
   const userId = normalizeUserId(userIdInput);
+  const dateKey = toLocalDateKey(date);
   const meals = await readMeals();
 
   return meals
@@ -155,7 +140,7 @@ export async function getMealsByDate(
       (meal) =>
         meal.user_id === userId &&
         meal.is_deleted === 0 &&
-        getDateOnly(meal.logged_at) === date
+        getDateOnly(meal.logged_at) === dateKey
     )
     .sort(
       (a, b) =>
@@ -182,8 +167,6 @@ export async function deleteMeal(
   });
 
   await writeMeals(updatedMeals);
-
-  await enqueue("delete", "meal", id, { local_id: id });
 }
 
 export async function getDailyCalories(
@@ -254,21 +237,4 @@ export async function getDailyCalorieHistory(
   }
 
   return result;
-}
-
-export async function getMealServerId(localId: string): Promise<string | null> {
-  const meals = await readMeals();
-  const found = meals.find((m) => m.id === localId);
-  return found?.server_id ?? null;
-}
-
-export async function updateMealServerId(
-  localId: string,
-  serverId: string
-): Promise<void> {
-  const meals = await readMeals();
-  const updated = meals.map((m) =>
-    m.id === localId ? { ...m, server_id: serverId } : m
-  );
-  await writeMeals(updated);
 }
