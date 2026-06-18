@@ -3,12 +3,14 @@ import { MealRepository } from '../db/repositories/meal.repo';
 import { WaterRepository } from '../db/repositories/water.repo';
 import { WeightRepository } from '../db/repositories/weight.repo';
 import { SyncQueueRepository } from '../db/repositories/sync-queue.repo';
+import { ProfileRepository } from '../db/repositories/profile.repo';
 import type { SyncQueueItem, EntityType } from '../db/schema';
+import { api } from '@/lib/apiClient';
 import { ApiClientError, ApiAuthError } from './errors';
 import {
   WeightApi,
-  // MealApi,   // TODO: uncomment when backend adds /api/meal-entries
-  // WaterApi,  // TODO: uncomment when backend adds /api/water-entries
+  MealApi,
+  WaterApi,
 } from './api.client';
 
 
@@ -138,6 +140,37 @@ export class SyncService {
       }
 
       if (err instanceof ApiClientError) {
+        if (err.status === 409 && item.operation === 'CREATE') {
+          console.log(`[SyncService] 409 Conflict for ${item.entity_type} — resolving duplicate...`);
+          try {
+            let duplicateServerId: number | undefined;
+            const p = JSON.parse(item.payload);
+            
+            if (item.entity_type === 'meal') {
+              const meals = await api.get<any[]>(`/meals?date=${p.logged_date}`);
+              const existing = meals?.find((m) => m.food_name === p.food_name && m.meal_type === p.meal_type);
+              if (existing?.id) duplicateServerId = existing.id;
+            } else if (item.entity_type === 'water') {
+              const waters = await api.get<any[]>(`/water?date=${p.logged_date}`);
+              const existing = waters?.find((w) => w.volume_ml === p.volume_ml);
+              if (existing?.id) duplicateServerId = existing.id;
+            } else if (item.entity_type === 'weight') {
+              const weights = await api.get<any[]>('/health/weight?limit=7&offset=0');
+              const existing = weights?.find((w) => w.weight_kg === p.weight_kg);
+              if (existing?.id) duplicateServerId = existing.id;
+            }
+            
+            if (duplicateServerId) {
+              await this.updateEntryAfterSuccess(item, duplicateServerId);
+              await this.queueRepo.markDone(item.id);
+              console.log(`[SyncService] Resolved 409: linked to server_id ${duplicateServerId}`);
+              return 'done';
+            }
+          } catch (e) {
+            console.warn('[SyncService] Failed to recover from 409', e);
+          }
+        }
+
         // 4xx: non-retryable (e.g. 404, 422)
         const msg = err.message;
         await this.queueRepo.dismiss(item.id);
@@ -185,51 +218,41 @@ export class SyncService {
       // ── Meal (stub — backend endpoint not yet available) ──
       case 'meal': {
         if (operation === 'CREATE') {
-          // TODO: uncomment when backend adds POST /api/meal-entries
-          // const p = payload as MealCreatePayload;
-          // const res = await MealApi.logMeal({
-          //   food_name: p.food_name,
-          //   meal_type: p.meal_type as any,
-          //   calories: p.calories,
-          //   protein_g: p.protein_g,
-          //   carb_g: p.carb_g,
-          //   fat_g: p.fat_g,
-          //   source: p.source as any,
-          //   ai_confidence: p.ai_confidence ?? undefined,
-          //   logged_date: p.logged_date,
-          //   client_created_at: p.client_created_at,
-          // });
-          // return res.id;
-          console.log('[SyncService] Meal sync skipped — endpoint not implemented yet');
-          throw new Error('MEAL_ENDPOINT_NOT_IMPLEMENTED');
+          const p = payload as MealCreatePayload;
+          const res = await MealApi.logMeal({
+            food_name: p.food_name,
+            meal_type: p.meal_type as any,
+            calories: p.calories,
+            protein_g: p.protein_g,
+            carb_g: p.carb_g,
+            fat_g: p.fat_g,
+            source: p.source as any,
+            ai_confidence: p.ai_confidence ?? undefined,
+            logged_date: p.logged_date,
+            client_created_at: p.client_created_at,
+          });
+          return res.id;
         } else {
-          // TODO: uncomment when backend adds DELETE /api/meal-entries/:id
-          // const p = payload as MealDeletePayload;
-          // await MealApi.deleteMeal(p.server_id);
-          console.log('[SyncService] Meal delete sync skipped — endpoint not implemented yet');
-          throw new Error('MEAL_ENDPOINT_NOT_IMPLEMENTED');
+          const p = payload as MealDeletePayload;
+          await MealApi.deleteMeal(p.server_id);
+          return undefined;
         }
       }
 
       // ── Water (stub — backend endpoint not yet available) ─
       case 'water': {
         if (operation === 'CREATE') {
-          // TODO: uncomment when backend adds POST /api/water-entries
-          // const p = payload as WaterCreatePayload;
-          // const res = await WaterApi.logWater({
-          //   volume_ml: p.volume_ml,
-          //   logged_date: p.logged_date,
-          //   client_created_at: p.client_created_at,
-          // });
-          // return res.id;
-          console.log('[SyncService] Water sync skipped — endpoint not implemented yet');
-          throw new Error('WATER_ENDPOINT_NOT_IMPLEMENTED');
+          const p = payload as WaterCreatePayload;
+          const res = await WaterApi.logWater({
+            volume_ml: p.volume_ml,
+            logged_date: p.logged_date,
+            client_created_at: p.client_created_at,
+          });
+          return res.id;
         } else {
-          // TODO: uncomment when backend adds DELETE /api/water-entries/:id
-          // const p = payload as WaterDeletePayload;
-          // await WaterApi.deleteWater(p.server_id);
-          console.log('[SyncService] Water delete sync skipped — endpoint not implemented yet');
-          throw new Error('WATER_ENDPOINT_NOT_IMPLEMENTED');
+          const p = payload as WaterDeletePayload;
+          await WaterApi.deleteWater(p.server_id);
+          return undefined;
         }
       }
 
@@ -249,8 +272,8 @@ export class SyncService {
     if (item.operation === 'DELETE') {
       // Server confirmed delete → hard delete locally
       switch (item.entity_type) {
-        case 'meal':   await this.mealRepo.hardDeleteMealEntry(item.local_id); break;
-        case 'water':  await this.waterRepo.hardDeleteWaterEntry(item.local_id); break;
+        case 'meal': await this.mealRepo.hardDeleteMealEntry(item.local_id); break;
+        case 'water': await this.waterRepo.hardDeleteWaterEntry(item.local_id); break;
         case 'weight': await this.weightRepo.hardDeleteWeightEntry(item.local_id); break;
       }
     } else {
@@ -264,6 +287,41 @@ export class SyncService {
           break;
         case 'weight':
           await this.weightRepo.updateWeightSyncStatus(item.local_id, 'synced', serverId);
+          if (item.operation === 'CREATE') {
+            try {
+              const profileRepo = new ProfileRepository(this.db);
+              const serverProfile = await api.get<any>("/profile");
+              
+              const currentUserId = serverProfile.user_id || 1; 
+
+              await profileRepo.upsertProfile({
+                user_id: currentUserId,
+                display_name: serverProfile.display_name ?? "",
+                avatar_url: serverProfile.avatar_url ?? null,
+                age: serverProfile.age ?? null,
+                gender: serverProfile.gender ?? null,
+                height_cm: serverProfile.height_cm ?? null,
+                weight_kg: serverProfile.weight_kg ?? null,
+                goal: serverProfile.goal ?? null,
+                activity_level: serverProfile.activity_level ?? null,
+                bmi: serverProfile.bmi ?? null,
+                bmr: serverProfile.bmr ?? null,
+                tdee: serverProfile.tdee ?? null,
+                calorie_target: serverProfile.calorie_target ?? null,
+                protein_target_g: serverProfile.protein_target_g ?? null,
+                carb_target_g: serverProfile.carb_target_g ?? null,
+                fat_target_g: serverProfile.fat_target_g ?? null,
+                water_target_ml: serverProfile.water_target_ml ?? null,
+                social_enabled: serverProfile.social_enabled ? 1 : 0,
+                onboarding_done: serverProfile.onboarding_done ? 1 : 0,
+                server_updated_at: new Date().toISOString(),
+                cached_at: new Date().toISOString(),
+              });
+              console.log('[SyncService] Refreshed profile after weight update');
+            } catch (e) {
+              console.warn('[SyncService] Failed to refresh profile after weight sync', e);
+            }
+          }
           break;
       }
     }
@@ -275,8 +333,8 @@ export class SyncService {
     error: string
   ): Promise<void> {
     switch (entityType) {
-      case 'meal':   await this.mealRepo.updateMealSyncStatus(localId, 'failed', undefined, error); break;
-      case 'water':  await this.waterRepo.updateWaterSyncStatus(localId, 'failed', undefined, error); break;
+      case 'meal': await this.mealRepo.updateMealSyncStatus(localId, 'failed', undefined, error); break;
+      case 'water': await this.waterRepo.updateWaterSyncStatus(localId, 'failed', undefined, error); break;
       case 'weight': await this.weightRepo.updateWeightSyncStatus(localId, 'failed', undefined, error); break;
     }
   }
