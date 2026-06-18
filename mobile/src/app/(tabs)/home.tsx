@@ -183,16 +183,20 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
         {/* ACTIVE CHALLENGE */}
-        <View style={styles.challengeCard}>
-          <Text style={styles.challengeLabel}>Active Challenge</Text>
-          <Text style={styles.challengeTitle}>Hydration Hero 💧</Text>
-          <Text style={styles.challengeSub}>5 / 7 days completed</Text>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => router.push("/challenges")}
+        >
+          <View style={styles.challengeCard}>
+            <Text style={styles.challengeLabel}>Active Challenge</Text>
+            <Text style={styles.challengeTitle}>Hydration Hero 💧</Text>
+            <Text style={styles.challengeSub}>5 / 7 days completed</Text>
 
-          <View style={styles.challengeProgress}>
-            <View style={styles.challengeFill} />
+            <View style={styles.challengeProgress}>
+              <View style={styles.challengeFill} />
+            </View>
           </View>
-        </View>
-
+        </TouchableOpacity>
         {/* AI INSIGHT */}
         <View style={styles.insightCard}>
           <Text style={styles.insightBadge}>AI Insight</Text>
