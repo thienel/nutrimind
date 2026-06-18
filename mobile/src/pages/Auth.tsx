@@ -1,14 +1,3 @@
-/**
- * Auth Page — Đăng nhập / Đăng ký
- *
- * Spec §2.3 (register), §2.4 (email login), §2.5 (Google sign-in)
- *
- * - Validation client-side inline
- * - Kết nối AuthContext để thực hiện API calls
- * - Loading state, error messages theo từng field
- * - Google Sign-In button
- */
-
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -31,25 +20,25 @@ import { Eye, EyeOff, Lock, Mail, User } from "lucide-react-native";
 import { useAuth } from "@/context/AuthContext";
 import type { ApiError } from "@/lib/apiClient";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface FormErrors {
   displayName?: string;
   email?: string;
   password?: string;
   confirmPassword?: string;
+  terms?: string;
   general?: string;
 }
-
-// ─── Validation ───────────────────────────────────────────────────────────────
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function validateSignIn(email: string, password: string): FormErrors {
   const errors: FormErrors = {};
-  if (!email.trim()) errors.email = "Email là bắt buộc";
-  else if (!EMAIL_REGEX.test(email)) errors.email = "Email không hợp lệ";
-  if (!password) errors.password = "Mật khẩu là bắt buộc";
+
+  if (!email.trim()) errors.email = "Email is required";
+  else if (!EMAIL_REGEX.test(email)) errors.email = "Invalid email";
+
+  if (!password) errors.password = "Password is required";
+
   return errors;
 }
 
@@ -57,57 +46,74 @@ function validateSignUp(
   email: string,
   password: string,
   confirmPassword: string,
-  displayName: string
+  displayName: string,
+  agreeTerms: boolean,
 ): FormErrors {
   const errors: FormErrors = {};
-  if (!displayName.trim()) errors.displayName = "Tên hiển thị là bắt buộc";
-  if (!email.trim()) errors.email = "Email là bắt buộc";
-  else if (!EMAIL_REGEX.test(email)) errors.email = "Email không hợp lệ";
-  if (!password) errors.password = "Mật khẩu là bắt buộc";
+
+  if (!displayName.trim()) errors.displayName = "Display name is required";
+
+  if (!email.trim()) errors.email = "Email is required";
+  else if (!EMAIL_REGEX.test(email)) errors.email = "Invalid email";
+
+  if (!password) errors.password = "Password is required";
   else if (password.length < 8)
-    errors.password = "Mật khẩu tối thiểu 8 ký tự";
+    errors.password = "Password must be at least 8 characters";
+
   if (password !== confirmPassword)
-    errors.confirmPassword = "Mật khẩu xác nhận không khớp";
+    errors.confirmPassword = "Passwords do not match";
+
+  if (!agreeTerms) errors.terms = "You must agree to the Terms of Service";
+
   return errors;
 }
 
-/** Map server error message → lỗi field/general */
 function parseServerError(err: ApiError): FormErrors {
   const msg = err.message ?? "";
-  if (err.status === 409)
-    return { email: "Email này đã được đăng ký. Vui lòng đăng nhập." };
+
+  if (err.status === 409) {
+    return {
+      email: "This email has already been registered.",
+    };
+  }
+
   if (err.status === 401) {
-    if (msg.includes("Google"))
+    if (msg.includes("Google")) {
       return {
         general:
-          "Tài khoản này đăng nhập bằng Google Sign-In. Vui lòng dùng nút Google.",
+          "This account uses Google Sign-In. Please continue with Google.",
       };
-    return { general: "Email hoặc mật khẩu không đúng." };
-  }
-  return { general: msg || "Đã có lỗi xảy ra. Vui lòng thử lại." };
-}
+    }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+    return {
+      general: "Incorrect email or password.",
+    };
+  }
+
+  return {
+    general: msg || "Something went wrong. Please try again.",
+  };
+}
 
 export function Auth() {
   const [isSignup, setIsSignup] = useState(false);
 
-  // Form fields
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // UI state
+  const [agreeTerms, setAgreeTerms] = useState(false);
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
   const [errors, setErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const { emailLogin, register, googleSignIn } = useAuth();
 
-  // ── Switch tabs — clear form ──────────────────────────────────────────────
   function switchTab(signup: boolean) {
     setIsSignup(signup);
     setErrors({});
@@ -115,17 +121,22 @@ export function Auth() {
     setEmail("");
     setPassword("");
     setConfirmPassword("");
+    setAgreeTerms(false);
     setShowPassword(false);
     setShowConfirm(false);
   }
 
-  // ── Submit Email form ─────────────────────────────────────────────────────
   async function handleSubmit() {
     Keyboard.dismiss();
 
-    // Client-side validation
     const clientErrors = isSignup
-      ? validateSignUp(email, password, confirmPassword, displayName)
+      ? validateSignUp(
+          email,
+          password,
+          confirmPassword,
+          displayName,
+          agreeTerms,
+        )
       : validateSignIn(email, password);
 
     if (Object.keys(clientErrors).length > 0) {
@@ -138,27 +149,33 @@ export function Auth() {
 
     try {
       if (isSignup) {
-        await register(email.trim().toLowerCase(), password, displayName.trim());
+        await register(
+          email.trim().toLowerCase(),
+          password,
+          displayName.trim(),
+        );
       } else {
         await emailLogin(email.trim().toLowerCase(), password);
       }
     } catch (err: unknown) {
-      const apiErr = err as ApiError;
-      setErrors(parseServerError(apiErr));
+      setErrors(parseServerError(err as ApiError));
     } finally {
       setLoading(false);
     }
   }
 
-  // ── Google Sign-In ────────────────────────────────────────────────────────
   async function handleGoogleSignIn() {
     setErrors({});
     setGoogleLoading(true);
+
     try {
       await googleSignIn();
     } catch (err: unknown) {
       const apiErr = err as ApiError;
-      setErrors({ general: apiErr.message ?? "Đăng nhập Google thất bại." });
+
+      setErrors({
+        general: apiErr.message ?? "Google Sign-In failed.",
+      });
     } finally {
       setGoogleLoading(false);
     }
@@ -171,37 +188,33 @@ export function Auth() {
         style={{ flex: 1 }}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 40 }}
-            keyboardShouldPersistTaps="handled"
-          >
-            {/* ── Tabs ───────────────────────────────────────────────────── */}
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Tabs */}
             <View style={styles.tabWrapper}>
               <Pressable
                 style={[styles.tab, !isSignup && styles.activeTab]}
                 onPress={() => switchTab(false)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: !isSignup }}
               >
-                <Text style={[styles.tabText, !isSignup && styles.activeTabText]}>
-                  Đăng nhập
+                <Text
+                  style={[styles.tabText, !isSignup && styles.activeTabText]}
+                >
+                  Login
                 </Text>
               </Pressable>
 
               <Pressable
                 style={[styles.tab, isSignup && styles.activeTab]}
                 onPress={() => switchTab(true)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isSignup }}
               >
-                <Text style={[styles.tabText, isSignup && styles.activeTabText]}>
-                  Đăng ký
+                <Text
+                  style={[styles.tabText, isSignup && styles.activeTabText]}
+                >
+                  Sign Up
                 </Text>
               </Pressable>
             </View>
 
-            {/* ── Avatar ─────────────────────────────────────────────────── */}
+            {/* Avatar */}
             <View style={styles.avatarWrapper}>
               <View style={styles.avatarCircle}>
                 <Image
@@ -213,176 +226,148 @@ export function Auth() {
               </View>
             </View>
 
-            {/* ── Title ──────────────────────────────────────────────────── */}
+            {/* Title */}
             <Text style={styles.title}>
-              {isSignup ? "Tạo tài khoản" : "Chào mừng trở lại"}
-            </Text>
-            <Text style={styles.subtitle}>
-              {isSignup
-                ? "Bắt đầu hành trình sức khoẻ của bạn"
-                : "Tiếp tục lối sống lành mạnh"}
+              {isSignup ? "Create Account" : "Welcome Back"}
             </Text>
 
-            {/* ── General error ───────────────────────────────────────────── */}
-            {errors.general ? (
+            <Text style={styles.subtitle}>
+              {isSignup
+                ? "Start your health journey today"
+                : "Continue your healthy lifestyle"}
+            </Text>
+
+            {/* General Error */}
+            {errors.general && (
               <View style={styles.generalError}>
                 <Text style={styles.generalErrorText}>{errors.general}</Text>
               </View>
-            ) : null}
+            )}
 
-            {/* ── Inputs ─────────────────────────────────────────────────── */}
+            {/* Inputs */}
             {isSignup && (
               <InputField
-                icon={<User size={18} color={errors.displayName ? "#EF4444" : "#94A3B8"} />}
-                placeholder="Tên hiển thị"
+                icon={<User size={18} color="#94A3B8" />}
+                placeholder="Display Name"
                 value={displayName}
-                onChangeText={(t) => {
-                  setDisplayName(t);
-                  if (errors.displayName) setErrors((e) => ({ ...e, displayName: undefined }));
-                }}
+                onChangeText={setDisplayName}
                 error={errors.displayName}
-                autoCapitalize="words"
-                returnKeyType="next"
               />
             )}
 
             <InputField
-              icon={<Mail size={18} color={errors.email ? "#EF4444" : "#94A3B8"} />}
+              icon={<Mail size={18} color="#94A3B8" />}
               placeholder="Email"
               value={email}
-              onChangeText={(t) => {
-                setEmail(t);
-                if (errors.email) setErrors((e) => ({ ...e, email: undefined }));
-              }}
+              onChangeText={setEmail}
               error={errors.email}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              returnKeyType="next"
             />
 
             <InputField
-              icon={<Lock size={18} color={errors.password ? "#EF4444" : "#94A3B8"} />}
-              placeholder="Mật khẩu"
+              icon={<Lock size={18} color="#94A3B8" />}
+              placeholder="Password"
               value={password}
-              onChangeText={(t) => {
-                setPassword(t);
-                if (errors.password) setErrors((e) => ({ ...e, password: undefined }));
-              }}
+              onChangeText={setPassword}
               error={errors.password}
               secureTextEntry={!showPassword}
               rightIcon={
-                <Pressable onPress={() => setShowPassword((v) => !v)} hitSlop={8}>
-                  {showPassword ? (
-                    <EyeOff size={18} color="#94A3B8" />
-                  ) : (
-                    <Eye size={18} color="#94A3B8" />
-                  )}
+                <Pressable onPress={() => setShowPassword(!showPassword)}>
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </Pressable>
               }
-              returnKeyType={isSignup ? "next" : "done"}
-              onSubmitEditing={isSignup ? undefined : handleSubmit}
             />
 
             {isSignup && (
               <InputField
-                icon={<Lock size={18} color={errors.confirmPassword ? "#EF4444" : "#94A3B8"} />}
-                placeholder="Xác nhận mật khẩu"
+                icon={<Lock size={18} color="#94A3B8" />}
+                placeholder="Confirm Password"
                 value={confirmPassword}
-                onChangeText={(t) => {
-                  setConfirmPassword(t);
-                  if (errors.confirmPassword)
-                    setErrors((e) => ({ ...e, confirmPassword: undefined }));
-                }}
+                onChangeText={setConfirmPassword}
                 error={errors.confirmPassword}
                 secureTextEntry={!showConfirm}
                 rightIcon={
-                  <Pressable onPress={() => setShowConfirm((v) => !v)} hitSlop={8}>
-                    {showConfirm ? (
-                      <EyeOff size={18} color="#94A3B8" />
-                    ) : (
-                      <Eye size={18} color="#94A3B8" />
-                    )}
+                  <Pressable onPress={() => setShowConfirm(!showConfirm)}>
+                    {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                   </Pressable>
                 }
-                returnKeyType="done"
-                onSubmitEditing={handleSubmit}
               />
             )}
 
-            {/* ── Remember / Terms ────────────────────────────────────────── */}
-            {!isSignup ? (
-              <View style={styles.row}>
-                <View style={styles.row} />
-                <Pressable onPress={() => router.push("/forgot-password")}>
-                  <Text style={styles.greenText}>Quên mật khẩu?</Text>
-                </Pressable>
-              </View>
+            {/* Terms */}
+            {isSignup ? (
+              <>
+                <View style={styles.row}>
+                  <Pressable
+                    style={[
+                      styles.checkbox,
+                      agreeTerms && styles.checkboxChecked,
+                    ]}
+                    onPress={() => setAgreeTerms(!agreeTerms)}
+                  >
+                    {agreeTerms && <Text style={styles.checkmark}>✓</Text>}
+                  </Pressable>
+
+                  <Text style={styles.smallText}>
+                    I agree to the{" "}
+                    <Text style={styles.greenText}>Terms of Service</Text>
+                  </Text>
+                </View>
+
+                {errors.terms && (
+                  <Text style={styles.fieldError}>{errors.terms}</Text>
+                )}
+              </>
             ) : (
-              <View style={[styles.row, { marginTop: 8 }]}>
-                <View style={styles.checkbox} />
-                <Text style={styles.smallText}>
-                  Tôi đồng ý với{" "}
-                  <Text style={styles.greenText}>Điều khoản sử dụng</Text>
-                </Text>
+              <View style={styles.row}>
+                <View />
+                <Pressable onPress={() => router.push("/forgot-password")}>
+                  <Text style={styles.greenText}>Forgot Password?</Text>
+                </Pressable>
               </View>
             )}
 
-            {/* ── CTA Button ─────────────────────────────────────────────── */}
+            {/* Submit */}
             <Pressable
               style={[styles.ctaButton, loading && styles.ctaDisabled]}
               onPress={handleSubmit}
               disabled={loading}
-              accessibilityRole="button"
-              accessibilityLabel={isSignup ? "Tạo tài khoản" : "Đăng nhập"}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.ctaText}>
-                  {isSignup ? "Tạo tài khoản" : "Đăng nhập"}
+                  {isSignup ? "Create Account" : "Login"}
                 </Text>
               )}
             </Pressable>
 
-            {/* ── Divider ────────────────────────────────────────────────── */}
+            {/* Divider */}
             <View style={styles.dividerRow}>
               <View style={styles.line} />
-              <Text style={styles.orText}>HOẶC</Text>
+              <Text style={styles.orText}>OR</Text>
               <View style={styles.line} />
             </View>
 
-            {/* ── Google Button ───────────────────────────────────────────── */}
-            <Pressable
-              style={[styles.googleBtn, googleLoading && styles.ctaDisabled]}
-              onPress={handleGoogleSignIn}
-              disabled={googleLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Đăng nhập bằng Google"
-            >
+            {/* Google */}
+            <Pressable style={styles.googleBtn} onPress={handleGoogleSignIn}>
               {googleLoading ? (
-                <ActivityIndicator color="#334155" size="small" />
+                <ActivityIndicator />
               ) : (
-                <>
-                  <Image
-                    source={{
-                      uri: "https://www.svgrepo.com/show/475656/google-color.svg",
-                    }}
-                    style={{ width: 22, height: 22 }}
-                  />
-                  <Text style={styles.googleText}>Tiếp tục với Google</Text>
-                </>
+                <Text style={styles.googleText}>Continue with Google</Text>
               )}
             </Pressable>
 
-            {/* ── Footer ─────────────────────────────────────────────────── */}
+            {/* Footer */}
             <View style={styles.footer}>
               <Text style={styles.smallText}>
-                {isSignup ? "Đã có tài khoản?" : "Chưa có tài khoản?"}
+                {isSignup
+                  ? "Already have an account?"
+                  : "Don't have an account?"}
               </Text>
+
               <Pressable onPress={() => switchTab(!isSignup)}>
                 <Text style={styles.greenText}>
-                  {isSignup ? " Đăng nhập" : " Đăng ký"}
+                  {isSignup ? " Login" : " Sign Up"}
                 </Text>
               </Pressable>
             </View>
@@ -393,23 +378,6 @@ export function Auth() {
   );
 }
 
-// ─── InputField Component ─────────────────────────────────────────────────────
-
-interface InputFieldProps {
-  icon?: React.ReactNode;
-  placeholder: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  error?: string;
-  rightIcon?: React.ReactNode;
-  secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address" | "numeric";
-  autoCapitalize?: "none" | "sentences" | "words" | "characters";
-  autoComplete?: string;
-  returnKeyType?: "done" | "next" | "go" | "search" | "send";
-  onSubmitEditing?: () => void;
-}
-
 function InputField({
   icon,
   placeholder,
@@ -418,15 +386,12 @@ function InputField({
   error,
   rightIcon,
   secureTextEntry,
-  keyboardType = "default",
-  autoCapitalize,
-  returnKeyType,
-  onSubmitEditing,
-}: InputFieldProps) {
+}: any) {
   return (
     <View style={styles.inputWrapper}>
-      <View style={[styles.input, !!error && styles.inputError]}>
+      <View style={[styles.input, error && styles.inputError]}>
         {icon}
+
         <TextInput
           placeholder={placeholder}
           placeholderTextColor="#94A3B8"
@@ -434,67 +399,24 @@ function InputField({
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry}
-          keyboardType={keyboardType}
-          autoCapitalize={autoCapitalize}
-          returnKeyType={returnKeyType}
-          onSubmitEditing={onSubmitEditing}
         />
+
         {rightIcon}
       </View>
-      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
+
+      {error && <Text style={styles.fieldError}>{error}</Text>}
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F7F9F8",
-    paddingHorizontal: 28,
-  },
-
-  tabWrapper: {
-    flexDirection: "row",
-    backgroundColor: "#EEF2F7",
-    borderRadius: 999,
-    padding: 4,
-    marginTop: 20,
-    alignSelf: "center",
-  },
-
-  tab: {
-    width: 120,
-    height: 48,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 999,
-  },
-
-  activeTab: {
-    backgroundColor: "#fff",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-
-  tabText: {
-    color: "#94A3B8",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-
-  activeTabText: {
-    color: "#0F172A",
-  },
-
-  avatarWrapper: {
-    alignItems: "center",
-    marginTop: 28,
-  },
-
+  container: { flex: 1, backgroundColor: "#F7F9F8", paddingHorizontal: 28 },
+  tabWrapper: { flexDirection: "row", marginTop: 20 },
+  tab: { flex: 1, padding: 14, alignItems: "center" },
+  activeTab: { borderBottomWidth: 2, borderColor: "#10B981" },
+  tabText: { color: "#94A3B8" },
+  activeTabText: { color: "#10B981", fontWeight: "700" },
+  avatarWrapper: { alignItems: "center", marginTop: 24 },
   avatarCircle: {
     width: 150,
     height: 150,
@@ -503,109 +425,61 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
-  avatar: {
-    width: 120,
-    height: 120,
-  },
-
+  avatar: { width: 120, height: 120 },
   title: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: "800",
-    color: "#0F172A",
     textAlign: "center",
-    marginTop: 22,
+    marginTop: 20,
   },
-
   subtitle: {
     textAlign: "center",
     color: "#64748B",
     marginTop: 8,
-    marginBottom: 22,
-    fontSize: 15,
+    marginBottom: 20,
   },
-
-  generalError: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#FCA5A5",
-  },
-
-  generalErrorText: {
-    color: "#DC2626",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-
-  inputWrapper: {
-    marginBottom: 14,
-  },
-
+  inputWrapper: { marginBottom: 14 },
   input: {
     height: 58,
     backgroundColor: "#fff",
-    borderRadius: 20,
+    borderRadius: 18,
     paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    borderWidth: 1.5,
-    borderColor: "transparent",
   },
-
-  inputError: {
-    borderColor: "#FCA5A5",
-    backgroundColor: "#FFF5F5",
-  },
-
-  inputText: {
-    flex: 1,
-    marginLeft: 12,
-    color: "#0F172A",
-    fontSize: 15,
-  },
-
+  inputError: { borderWidth: 1, borderColor: "#EF4444" },
+  inputText: { flex: 1, marginLeft: 12 },
   fieldError: {
     color: "#EF4444",
+    marginTop: 6,
     fontSize: 12,
-    marginTop: 5,
-    marginLeft: 16,
   },
-
   row: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 20,
   },
-
   checkbox: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
+    width: 18,
+    height: 18,
     borderWidth: 1.5,
     borderColor: "#CBD5E1",
+    borderRadius: 4,
     marginRight: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
-
-  smallText: {
-    color: "#64748B",
-    fontSize: 14,
+  checkboxChecked: {
+    backgroundColor: "#10B981",
+    borderColor: "#10B981",
   },
-
-  greenText: {
-    color: "#10B981",
-    fontWeight: "600",
-    fontSize: 14,
+  checkmark: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 12,
   },
-
+  smallText: { color: "#64748B" },
+  greenText: { color: "#10B981", fontWeight: "600" },
   ctaButton: {
     height: 58,
     borderRadius: 999,
@@ -613,61 +487,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
-  ctaDisabled: {
-    opacity: 0.65,
-  },
-
-  ctaText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 17,
-  },
-
+  ctaDisabled: { opacity: 0.6 },
+  ctaText: { color: "white", fontWeight: "700" },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 26,
+    marginVertical: 24,
   },
-
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E2E8F0",
-  },
-
-  orText: {
-    marginHorizontal: 14,
-    color: "#94A3B8",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
+  line: { flex: 1, height: 1, backgroundColor: "#E2E8F0" },
+  orText: { marginHorizontal: 10 },
   googleBtn: {
     height: 58,
-    backgroundColor: "#fff",
     borderRadius: 999,
+    backgroundColor: "white",
     justifyContent: "center",
     alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
   },
-
-  googleText: {
-    fontWeight: "600",
-    color: "#334155",
-    fontSize: 15,
-  },
-
+  googleText: { fontWeight: "600" },
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     marginTop: 28,
+    marginBottom: 30,
   },
+  generalError: {
+    backgroundColor: "#FEF2F2",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  generalErrorText: { color: "#DC2626" },
 });
