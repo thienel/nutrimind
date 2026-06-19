@@ -238,3 +238,20 @@ export async function getDailyCalorieHistory(
 
   return result;
 }
+
+export async function updateMealServerId(localId: string, serverId: string): Promise<void> {
+  const meals = await readMeals();
+  const updated = meals.map((meal) => {
+    if (meal.id === localId) {
+      return { ...meal, server_id: serverId };
+    }
+    return meal;
+  });
+  await writeMeals(updated);
+}
+
+export async function getMealServerId(localId: string): Promise<string | null> {
+  const meals = await readMeals();
+  const meal = meals.find((m) => m.id === localId);
+  return meal?.server_id ?? null;
+}

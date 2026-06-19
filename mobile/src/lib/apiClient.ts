@@ -153,10 +153,11 @@ export async function request<T = unknown>(
   }
 
   if (!res.ok) {
+    const errObj = json.error as { code?: string; message?: string } | undefined;
     throw {
       status: res.status,
-      code: (json as Record<string, string>).code,
-      message: json.message ?? "Đã có lỗi xảy ra",
+      code: errObj?.code ?? (json.code as string),
+      message: errObj?.message ?? json.message ?? "Đã có lỗi xảy ra",
     } as ApiError;
   }
 
