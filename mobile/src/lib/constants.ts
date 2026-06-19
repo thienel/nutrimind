@@ -1,6 +1,6 @@
 
 /** Base URL của NutriMind backend API (không có trailing slash) */
-const _envBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:8000";
+const _envBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://168.144.44.209:8000";
 export const API_BASE_URL = _envBaseUrl.endsWith("/api/v1") ? _envBaseUrl : `${_envBaseUrl}/api/v1`;
 
 /** Web / Android Google OAuth Client ID */
