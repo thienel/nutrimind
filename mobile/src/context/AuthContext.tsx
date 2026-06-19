@@ -306,14 +306,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Google Sign-In (spec §2.5) ────────────────────────────────────────────
   const googleSignIn = useCallback(async () => {
-    const idToken = await getGoogleIdToken();
-    if (!idToken) return; // User cancel → không làm gì
+    try {
+      const idToken = await getGoogleIdToken();
+      if (!idToken) return; // User cancel → không làm gì
 
-    const resp = await api.post<AuthTokenResponse>("/auth/google", {
-      id_token: idToken,
-    });
-    await persistAuth(resp);
-    await navigateAfterAuth(resp.is_first_login, resp.user.id);
+      const resp = await api.post<AuthTokenResponse>("/auth/google", {
+        id_token: idToken,
+      });
+      await persistAuth(resp);
+      await navigateAfterAuth(resp.is_first_login, resp.user.id);
+    } catch (error: any) {
+      console.error("Google SignIn Error:", error);
+      Alert.alert("Lỗi đăng nhập", error?.message || JSON.stringify(error));
+    }
   }, [persistAuth, navigateAfterAuth]);
 
   // ── Manual Sign-Out (spec §2.10) ──────────────────────────────────────────
