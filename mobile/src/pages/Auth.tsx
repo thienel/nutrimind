@@ -31,17 +31,28 @@ interface FormErrors {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+//validate form sign in
 function validateSignIn(email: string, password: string): FormErrors {
   const errors: FormErrors = {};
 
-  if (!email.trim()) errors.email = "Email is required";
-  else if (!EMAIL_REGEX.test(email)) errors.email = "Invalid email";
+  // Kiểm tra email rỗng
+  if (!email.trim()) {
+    errors.email = "Email is required";
+  }
+  // Kiểm tra email sai format
+  else if (!EMAIL_REGEX.test(email)) {
+    errors.email = "Invalid email";
+  }
 
-  if (!password) errors.password = "Password is required";
+  // Kiểm tra password rỗng
+  if (!password) {
+    errors.password = "Password is required";
+  }
 
   return errors;
 }
 
+//validate form sign up
 function validateSignUp(
   email: string,
   password: string,
@@ -51,33 +62,54 @@ function validateSignUp(
 ): FormErrors {
   const errors: FormErrors = {};
 
-  if (!displayName.trim()) errors.displayName = "Display name is required";
+  // Check tên hiển thị
+  if (!displayName.trim()) {
+    errors.displayName = "Display name is required";
+  }
 
-  if (!email.trim()) errors.email = "Email is required";
-  else if (!EMAIL_REGEX.test(email)) errors.email = "Invalid email";
+  // Check email
+  if (!email.trim()) {
+    errors.email = "Email is required";
+  } else if (!EMAIL_REGEX.test(email)) {
+    errors.email = "Invalid email";
+  }
 
-  if (!password) errors.password = "Password is required";
-  else if (password.length < 8)
+  // Check password
+  if (!password) {
+    errors.password = "Password is required";
+  }
+  // Password tối thiểu 8 ký tự
+  else if (password.length < 8) {
     errors.password = "Password must be at least 8 characters";
+  }
 
-  if (password !== confirmPassword)
+  // Confirm password phải giống password
+  if (password !== confirmPassword) {
     errors.confirmPassword = "Passwords do not match";
+  }
 
-  if (!agreeTerms) errors.terms = "You must agree to the Terms of Service";
+  // Checkbox điều khoản bắt buộc tick
+  if (!agreeTerms) {
+    errors.terms = "You must agree to the Terms of Service";
+  }
 
   return errors;
 }
 
+//xử lý lỗi be
 function parseServerError(err: ApiError): FormErrors {
   const msg = err.message ?? "";
 
+  // Email đã tồn tại
   if (err.status === 409) {
     return {
       email: "This email has already been registered.",
     };
   }
 
+  // Unauthorized
   if (err.status === 401) {
+    // Nếu tài khoản này dùng Google
     if (msg.includes("Google")) {
       return {
         general:
@@ -85,11 +117,13 @@ function parseServerError(err: ApiError): FormErrors {
       };
     }
 
+    // Sai tài khoản/mật khẩu
     return {
       general: "Incorrect email or password.",
     };
   }
 
+  // Lỗi mặc định
   return {
     general: msg || "Something went wrong. Please try again.",
   };
@@ -116,19 +150,29 @@ export function Auth() {
 
   function switchTab(signup: boolean) {
     setIsSignup(signup);
+
+    // reset lỗi
     setErrors({});
+
+    // reset dữ liệu form
     setDisplayName("");
     setEmail("");
     setPassword("");
     setConfirmPassword("");
+
+    // reset checkbox
     setAgreeTerms(false);
+
+    // reset trạng thái show password
     setShowPassword(false);
     setShowConfirm(false);
   }
 
   async function handleSubmit() {
+    // Ẩn bàn phím trước khi xử lý
     Keyboard.dismiss();
 
+    //validate phía client trước
     const clientErrors = isSignup
       ? validateSignUp(
           email,
@@ -139,15 +183,18 @@ export function Auth() {
         )
       : validateSignIn(email, password);
 
+    //có lỗi thì dừng
     if (Object.keys(clientErrors).length > 0) {
       setErrors(clientErrors);
       return;
     }
 
+    //clear lỗi cũ
     setErrors({});
     setLoading(true);
 
     try {
+      //sign up gọi register / sign in gọi login
       if (isSignup) {
         await register(
           email.trim().toLowerCase(),
@@ -158,12 +205,14 @@ export function Auth() {
         await emailLogin(email.trim().toLowerCase(), password);
       }
     } catch (err: unknown) {
+      //parse lỗi be ra ui
       setErrors(parseServerError(err as ApiError));
     } finally {
       setLoading(false);
     }
   }
 
+  //login bằng gg
   async function handleGoogleSignIn() {
     setErrors({});
     setGoogleLoading(true);
@@ -173,6 +222,7 @@ export function Auth() {
     } catch (err: unknown) {
       const apiErr = err as ApiError;
 
+      //hiển thị lỗi từ server
       setErrors({
         general: apiErr.message ?? "Google Sign-In failed.",
       });
