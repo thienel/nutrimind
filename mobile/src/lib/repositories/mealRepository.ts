@@ -1,6 +1,13 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+/**
+ * Meal Repository — CRUD cho meal_entries sử dụng SQLite thay vì AsyncStorage.
+ *
+ * Lưu trữ bữa ăn offline, tự động enqueue vào sync_queue.
+ * Áp dụng câu lệnh SQLite để tính tổng Calories/Macros theo đúng đặc tả.
+ */
 
-import { getLocalDateKey, toLocalDateKey } from "@/lib/dateUtils";
+import { getDb, generateUUID } from "@/lib/db";
+import { enqueue } from "@/lib/repositories/syncQueue";
+import { toLocalDateKey } from "@/lib/dateUtils";
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "other";
 
@@ -28,84 +35,74 @@ export interface InsertMealData {
   fatG?: number;
   mealType?: MealType;
   loggedAt?: string;
-}
-
-const STORAGE_KEY = "nutrimind_meal_entries_v1";
-
-function generateUUID(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
-    const random = (Math.random() * 16) | 0;
-    const value = char === "x" ? random : (random & 0x3) | 0x8;
-
-    return value.toString(16);
-  });
+  source?: string;
+  aiConfidence?: number;
 }
 
 function normalizeUserId(userId: number): number {
   if (Number.isFinite(userId) && userId > 0) {
     return userId;
   }
-
   return 1;
 }
 
-function normalizeDate(date: Date): string {
-  return getLocalDateKey(date);
-}
-
-function getDateOnly(value: string): string {
-  return toLocalDateKey(value);
-}
-
-async function readMeals(): Promise<MealEntry[]> {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed as MealEntry[];
-  } catch (error) {
-    console.warn("[mealRepository] readMeals failed:", error);
-    return [];
-  }
-}
-
-async function writeMeals(meals: MealEntry[]): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(meals));
-}
-
 export async function insertMeal(data: InsertMealData): Promise<string> {
-  const now = new Date().toISOString();
+  const db = await getDb();
   const id = generateUUID();
   const userId = normalizeUserId(data.userId);
+  const now = new Date().toISOString();
+  
+  const loggedAt = data.loggedAt ?? now;
+  const loggedDate = toLocalDateKey(loggedAt);
 
-  const meal: MealEntry = {
-    id,
-    user_id: userId,
-    name: data.name.trim() || "Meal",
-    calories: Number.isFinite(data.calories) ? data.calories : 0,
-    protein_g: Number.isFinite(data.proteinG ?? 0) ? data.proteinG ?? 0 : 0,
-    carbs_g: Number.isFinite(data.carbsG ?? 0) ? data.carbsG ?? 0 : 0,
-    fat_g: Number.isFinite(data.fatG ?? 0) ? data.fatG ?? 0 : 0,
-    meal_type: data.mealType ?? "other",
-    logged_at: data.loggedAt ?? now,
-    created_at: now,
-    is_deleted: 0,
-    server_id: null,
-  };
+  const mealName = data.name.trim() || "Meal";
+  const calories = Number.isFinite(data.calories) ? data.calories : 0;
+  const protein_g = Number.isFinite(data.proteinG ?? 0) ? data.proteinG ?? 0 : 0;
+  const carb_g = Number.isFinite(data.carbsG ?? 0) ? data.carbsG ?? 0 : 0;
+  const fat_g = Number.isFinite(data.fatG ?? 0) ? data.fatG ?? 0 : 0;
+  const meal_type = data.mealType ?? "other";
+  const source = data.source ?? "manual";
 
-  const meals = await readMeals();
-  meals.unshift(meal);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO local_meal_entries (
+        local_id, server_id, user_id, food_name, meal_type,
+        calories, protein_g, carb_g, fat_g,
+        source, ai_confidence, logged_date,
+        client_created_at, sync_status, sync_attempts, last_sync_error, created_at
+      ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, NULL, ?);`,
+      [
+        id,
+        userId,
+        mealName,
+        meal_type,
+        calories,
+        protein_g,
+        carb_g,
+        fat_g,
+        source,
+        data.aiConfidence ?? null,
+        loggedDate,
+        loggedAt,
+        now
+      ]
+    );
 
-  await writeMeals(meals);
+    // Đẩy vào hàng đợi sync_queue
+    await enqueue("create", "meal", id, {
+      local_id: id,
+      food_name: mealName,
+      meal_type: meal_type,
+      calories: calories,
+      protein_g: protein_g,
+      carb_g: carb_g,
+      fat_g: fat_g,
+      source: source,
+      ai_confidence: data.aiConfidence ?? null,
+      logged_date: loggedDate,
+      client_created_at: loggedAt,
+    });
+  });
 
   return id;
 }
@@ -116,15 +113,30 @@ export async function getMealHistory(
   offset = 0
 ): Promise<MealEntry[]> {
   const userId = normalizeUserId(userIdInput);
-  const meals = await readMeals();
+  const db = await getDb();
 
-  return meals
-    .filter((meal) => meal.user_id === userId && meal.is_deleted === 0)
-    .sort(
-      (a, b) =>
-        new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime()
-    )
-    .slice(offset, offset + limit);
+  const rows = await db.getAllAsync<any>(
+    `SELECT * FROM local_meal_entries
+     WHERE user_id = ? AND sync_status != 'deleted_pending'
+     ORDER BY client_created_at DESC
+     LIMIT ? OFFSET ?;`,
+    [userId, limit, offset]
+  );
+
+  return rows.map((r) => ({
+    id: r.local_id,
+    user_id: r.user_id,
+    name: r.food_name,
+    calories: r.calories,
+    protein_g: r.protein_g,
+    carbs_g: r.carb_g,
+    fat_g: r.fat_g,
+    meal_type: r.meal_type as MealType,
+    logged_at: r.client_created_at,
+    created_at: r.created_at,
+    is_deleted: r.sync_status === "deleted_pending" ? 1 : 0,
+    server_id: r.server_id ? String(r.server_id) : null,
+  }));
 }
 
 export async function getMealsByDate(
@@ -132,20 +144,30 @@ export async function getMealsByDate(
   date: string
 ): Promise<MealEntry[]> {
   const userId = normalizeUserId(userIdInput);
-  const dateKey = toLocalDateKey(date);
-  const meals = await readMeals();
+  const db = await getDb();
+  const dateOnly = toLocalDateKey(date);
 
-  return meals
-    .filter(
-      (meal) =>
-        meal.user_id === userId &&
-        meal.is_deleted === 0 &&
-        getDateOnly(meal.logged_at) === dateKey
-    )
-    .sort(
-      (a, b) =>
-        new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
-    );
+  const rows = await db.getAllAsync<any>(
+    `SELECT * FROM local_meal_entries
+     WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending'
+     ORDER BY client_created_at ASC;`,
+    [userId, dateOnly]
+  );
+
+  return rows.map((r) => ({
+    id: r.local_id,
+    user_id: r.user_id,
+    name: r.food_name,
+    calories: r.calories,
+    protein_g: r.protein_g,
+    carbs_g: r.carb_g,
+    fat_g: r.fat_g,
+    meal_type: r.meal_type as MealType,
+    logged_at: r.client_created_at,
+    created_at: r.created_at,
+    is_deleted: r.sync_status === "deleted_pending" ? 1 : 0,
+    server_id: r.server_id ? String(r.server_id) : null,
+  }));
 }
 
 export async function deleteMeal(
@@ -153,29 +175,48 @@ export async function deleteMeal(
   userIdInput: number
 ): Promise<void> {
   const userId = normalizeUserId(userIdInput);
-  const meals = await readMeals();
+  const db = await getDb();
 
-  const updatedMeals = meals.map((meal) => {
-    if (meal.id === id && meal.user_id === userId) {
-      return {
-        ...meal,
-        is_deleted: 1,
-      };
+  await db.withTransactionAsync(async () => {
+    const entry = await db.getFirstAsync<{ server_id: string | null }>(
+      `SELECT server_id FROM local_meal_entries WHERE local_id = ? AND user_id = ?;`,
+      [id, userId]
+    );
+
+    if (!entry) return;
+
+    if (entry.server_id == null) {
+      // Trường hợp A: Xóa entry chưa sync
+      await db.runAsync(`DELETE FROM local_meal_entries WHERE local_id = ?;`, [id]);
+      await db.runAsync(`DELETE FROM sync_queue WHERE local_id = ?;`, [id]);
+    } else {
+      // Trường hợp B & C: Đã sync hoặc đang sync
+      await db.runAsync(
+        `UPDATE local_meal_entries
+         SET sync_status = 'deleted_pending'
+         WHERE local_id = ? AND user_id = ?;`,
+        [id, userId]
+      );
+      await enqueue("delete", "meal", id, { server_id: Number(entry.server_id) });
     }
-
-    return meal;
   });
-
-  await writeMeals(updatedMeals);
 }
 
 export async function getDailyCalories(
   userIdInput: number,
   date: string
 ): Promise<number> {
-  const meals = await getMealsByDate(userIdInput, date);
+  const userId = normalizeUserId(userIdInput);
+  const db = await getDb();
+  const dateOnly = toLocalDateKey(date);
 
-  return meals.reduce((total, meal) => total + meal.calories, 0);
+  const row = await db.getFirstAsync<{ total: number }>(
+    `SELECT COALESCE(SUM(calories), 0) as total
+     FROM local_meal_entries
+     WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending';`,
+    [userId, dateOnly]
+  );
+  return row?.total ?? 0;
 }
 
 export async function getDailyMacros(
@@ -187,22 +228,32 @@ export async function getDailyMacros(
   carbs: number;
   fat: number;
 }> {
-  const meals = await getMealsByDate(userIdInput, date);
+  const userId = normalizeUserId(userIdInput);
+  const db = await getDb();
+  const dateOnly = toLocalDateKey(date);
 
-  return meals.reduce(
-    (total, meal) => ({
-      calories: total.calories + meal.calories,
-      protein: total.protein + meal.protein_g,
-      carbs: total.carbs + meal.carbs_g,
-      fat: total.fat + meal.fat_g,
-    }),
-    {
-      calories: 0,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-    }
+  const row = await db.getFirstAsync<{
+    cals: number;
+    pro: number;
+    carb: number;
+    fat: number;
+  }>(
+    `SELECT
+      COALESCE(SUM(calories), 0) as cals,
+      COALESCE(SUM(protein_g), 0) as pro,
+      COALESCE(SUM(carb_g), 0) as carb,
+      COALESCE(SUM(fat_g), 0) as fat
+     FROM local_meal_entries
+     WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending';`,
+    [userId, dateOnly]
   );
+
+  return {
+    calories: row?.cals ?? 0,
+    protein: row?.pro ?? 0,
+    carbs: row?.carb ?? 0,
+    fat: row?.fat ?? 0,
+  };
 }
 
 export async function getDailyCalorieHistory(
@@ -210,48 +261,62 @@ export async function getDailyCalorieHistory(
   days = 7
 ): Promise<{ date: string; calories: number }[]> {
   const userId = normalizeUserId(userIdInput);
-  const meals = await readMeals();
+  const db = await getDb();
 
+  // Tạo ra danh sách N ngày (từ quá khứ đến hiện tại)
+  // để đảm bảo ngày không có data sẽ map được với 0
   const today = new Date();
-  const result: { date: string; calories: number }[] = [];
-
-  for (let index = days - 1; index >= 0; index -= 1) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - index);
-
-    const dateKey = normalizeDate(date);
-
-    const calories = meals
-      .filter(
-        (meal) =>
-          meal.user_id === userId &&
-          meal.is_deleted === 0 &&
-          getDateOnly(meal.logged_at) === dateKey
-      )
-      .reduce((total, meal) => total + meal.calories, 0);
-
-    result.push({
-      date: dateKey,
-      calories,
-    });
+  const resultMap: Record<string, number> = {};
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    // Sử dụng local timezone 'en-CA' để giữ YYYY-MM-DD
+    const dateKey = d.toLocaleDateString('en-CA'); 
+    resultMap[dateKey] = 0;
   }
 
-  return result;
+  // Lấy dữ liệu group by logged_date từ SQLite theo đúng Spec
+  const rows = await db.getAllAsync<{ date: string; calories: number }>(
+    `SELECT logged_date as date, COALESCE(SUM(calories), 0) as calories
+     FROM local_meal_entries
+     WHERE user_id = ?
+       AND sync_status != 'deleted_pending'
+       AND client_created_at >= datetime('now', ? || ' days')
+     GROUP BY logged_date
+     ORDER BY date ASC;`,
+    [userId, -days]
+  );
+
+  // Ghi đè vào map
+  for (const row of rows) {
+    if (resultMap[row.date] !== undefined) {
+      resultMap[row.date] = row.calories;
+    }
+  }
+
+  // Chuyển sang mảng
+  return Object.keys(resultMap)
+    .sort()
+    .map((date) => ({
+      date,
+      calories: resultMap[date],
+    }));
 }
 
 export async function updateMealServerId(localId: string, serverId: string): Promise<void> {
-  const meals = await readMeals();
-  const updated = meals.map((meal) => {
-    if (meal.id === localId) {
-      return { ...meal, server_id: serverId };
-    }
-    return meal;
-  });
-  await writeMeals(updated);
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE local_meal_entries SET server_id = ? WHERE local_id = ?`,
+    [serverId, localId]
+  );
 }
 
 export async function getMealServerId(localId: string): Promise<string | null> {
-  const meals = await readMeals();
-  const meal = meals.find((m) => m.id === localId);
-  return meal?.server_id ?? null;
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ server_id: string | null }>(
+    `SELECT server_id FROM local_meal_entries WHERE local_id = ?`,
+    [localId]
+  );
+  return row?.server_id ?? null;
 }

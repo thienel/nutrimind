@@ -12,7 +12,7 @@ import { Bot, ChartColumn, House, Plus, UserRound } from "lucide-react-native";
 const AI_COACH_LAST_SEEN_DATE_KEY = "nutrimind_ai_coach_last_seen_date";
 
 function getTodayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString('en-CA');
 }
 
 export default function TabsLayout() {
