@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useNetwork } from "@/context/NetworkContext";
 import {
   logWeight,
   deleteWeightLog,
@@ -38,6 +39,8 @@ export function useWeightLog(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  const { triggerSync } = useNetwork();
 
   const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
 
@@ -77,6 +80,7 @@ export function useWeightLog(
       try {
         const id = await logWeight({ userId: numericUserId, weightKg, note });
         refresh();
+        triggerSync();
         return id;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Lỗi lưu cân nặng";
@@ -84,7 +88,7 @@ export function useWeightLog(
         return null;
       }
     },
-    [numericUserId, refresh]
+    [numericUserId, refresh, triggerSync]
   );
 
   const removeWeight = useCallback(
@@ -93,12 +97,13 @@ export function useWeightLog(
       try {
         await deleteWeightLog(id, numericUserId);
         refresh();
+        triggerSync();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Lỗi xóa";
         setError(msg);
       }
     },
-    [numericUserId, refresh]
+    [numericUserId, refresh, triggerSync]
   );
 
   return { history, latestWeight, isLoading, error, addWeight, removeWeight, refresh };

@@ -9,7 +9,11 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft, Flame, Droplets } from "lucide-react-native";
+import { ChevronLeft, Flame, Droplets, WifiOff } from "lucide-react-native";
+
+import { useNetwork } from "@/context/NetworkContext";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { OfflineEmptyState } from "@/components/OfflineEmptyState";
 
 import {
   getFriends,
@@ -25,6 +29,8 @@ export default function Friends() {
 
   // State lưu danh sách lời mời kết bạn đang chờ xử lý
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+
+  const { isOnline } = useNetwork();
 
   /**
    * Hàm load lại toàn bộ danh sách bạn bè + request
@@ -184,6 +190,7 @@ export default function Friends() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <OfflineBanner pushContent />
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* HEADER */}
         <View style={styles.header}>
@@ -198,59 +205,67 @@ export default function Friends() {
         </View>
 
         {/* SUMMARY */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Your Support Circle</Text>
-
-          <Text style={styles.summaryDesc}>
-            Build healthy habits together and stay accountable.
-          </Text>
-
-          <View style={styles.statsRow}>
-            <View>
-              <Text style={styles.statNumber}>{friends.length}</Text>
-              <Text style={styles.statLabel}>Friends</Text>
-            </View>
-
-            <View>
-              <Text style={styles.statNumber}>{pendingRequests.length}</Text>
-              <Text style={styles.statLabel}>Requests</Text>
-            </View>
+        {!isOnline ? (
+          <View style={{ flex: 1, minHeight: 500 }}>
+            <OfflineEmptyState onRetry={loadFriends} />
           </View>
-
-          <Pressable
-            style={styles.addFriendButton}
-            onPress={() => router.push("/add-friend")}
-          >
-            <Text style={styles.addFriendText}>+ Add Friend</Text>
-          </Pressable>
-        </View>
-
-        {/* PENDING */}
-        {pendingRequests.length > 0 && (
+        ) : (
           <>
-            <Text style={styles.sectionTitle}>Pending Requests</Text>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>Your Support Circle</Text>
 
-            {pendingRequests.map((req) => (
-              <RequestCard
-                key={req.friendship_id}
-                request={req}
-                onAccept={() => handleAccept(req.friendship_id)}
-                onReject={() => handleReject(req.friendship_id)}
+              <Text style={styles.summaryDesc}>
+                Build healthy habits together and stay accountable.
+              </Text>
+
+              <View style={styles.statsRow}>
+                <View>
+                  <Text style={styles.statNumber}>{friends.length}</Text>
+                  <Text style={styles.statLabel}>Friends</Text>
+                </View>
+
+                <View>
+                  <Text style={styles.statNumber}>{pendingRequests.length}</Text>
+                  <Text style={styles.statLabel}>Requests</Text>
+                </View>
+              </View>
+
+              <Pressable
+                style={styles.addFriendButton}
+                onPress={() => router.push("/add-friend")}
+              >
+                <Text style={styles.addFriendText}>+ Add Friend</Text>
+              </Pressable>
+            </View>
+
+            {/* PENDING */}
+            {pendingRequests.length > 0 && (
+              <>
+                <Text style={styles.sectionTitle}>Pending Requests</Text>
+
+                {pendingRequests.map((req) => (
+                  <RequestCard
+                    key={req.friendship_id}
+                    request={req}
+                    onAccept={() => handleAccept(req.friendship_id)}
+                    onReject={() => handleReject(req.friendship_id)}
+                  />
+                ))}
+              </>
+            )}
+
+            {/* FRIENDS */}
+            <Text style={styles.sectionTitle}>My Friends</Text>
+
+            {friends.map((friend) => (
+              <FriendCard
+                key={friend.user_id}
+                friend={friend}
+                onCheer={handleCheer}
               />
             ))}
           </>
         )}
-
-        {/* FRIENDS */}
-        <Text style={styles.sectionTitle}>My Friends</Text>
-
-        {friends.map((friend) => (
-          <FriendCard
-            key={friend.user_id}
-            friend={friend}
-            onCheer={handleCheer}
-          />
-        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -456,4 +471,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   acceptButtonText: { color: "white", fontWeight: "700" },
+  offlineContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 60,
+    paddingHorizontal: 20,
+  },
+  offlineIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  offlineTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginBottom: 8,
+  },
+  offlineDesc: {
+    fontSize: 15,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 22,
+  },
 });

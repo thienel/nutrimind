@@ -32,7 +32,7 @@ export function WaterLog() {
   const { user } = useAuth();
   const { profile } = useOfflineProfile();
   const { showToast } = useToast();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA');
   const { logs, totalMl, addWater, removeWater, isLoading } = useWaterLog(
     user?.id ? Number(user.id) : null,
     today
