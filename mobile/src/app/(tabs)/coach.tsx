@@ -20,6 +20,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useOfflineProfile } from "@/hooks/useOfflineProfile";
 import { useNetwork } from "@/context/NetworkContext";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { OfflineEmptyState } from "@/components/OfflineEmptyState";
 
 interface Message {
   id: string;
@@ -214,7 +215,11 @@ export default function CoachScreen() {
         </View>
       </View>
 
-      {/* Chat Area */}
+      {!isOnline ? (
+        <OfflineEmptyState />
+      ) : (
+        <>
+          {/* Chat Area */}
       <ScrollView
         ref={scrollViewRef}
         style={styles.chatList}
@@ -315,6 +320,8 @@ export default function CoachScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+        </>
+      )}
     </SafeAreaView>
   );
 }

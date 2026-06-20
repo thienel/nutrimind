@@ -13,7 +13,7 @@
 
 import * as SQLite from "expo-sqlite";
 
-const DB_NAME = "nutrimind.db";
+const DB_NAME = "nutrimind_v2.db";
 const SCHEMA_VERSION = 1;
 
 let _db: SQLite.SQLiteDatabase | null = null;
@@ -42,7 +42,8 @@ export async function initDatabase(): Promise<void> {
     const currentVersion = result?.user_version ?? 0;
 
     if (currentVersion < 1) {
-      await migrateV1(db);
+      // Bỏ qua migrate cũ vì đã chuyển sang SQLiteProvider với schema mới
+      // await migrateV1(db);
     }
   });
 }
