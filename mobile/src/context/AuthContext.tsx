@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState } from "react-native";
 import { router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 
@@ -123,6 +123,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Tránh double-run startup check (React 18 StrictMode)
   const startupRan = useRef(false);
+
+  // ── AppState listener (spec §11.6: pull data sau 30 phút ở background) ──
+  const lastBackgroundTime = useRef<number>(Date.now());
+  const isPullingRef = useRef(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "background" || nextAppState === "inactive") {
+        lastBackgroundTime.current = Date.now();
+      } else if (nextAppState === "active") {
+        const timeInBackground = Date.now() - lastBackgroundTime.current;
+        // 30 phút = 30 * 60 * 1000 = 1800000 ms
+        if (timeInBackground >= 1800000 && !isPullingRef.current) {
+          isPullingRef.current = true;
+          console.log("[AuthContext] App in background for >30m. Pulling data...");
+          pullInitialData(db, user.id).finally(() => {
+            isPullingRef.current = false;
+          });
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user?.id, db]);
 
   // ── Helper: lưu token + cập nhật state ──────────────────────────────────
   const persistAuth = useCallback(async (resp: AuthTokenResponse) => {
