@@ -145,7 +145,7 @@ export class SyncService {
           try {
             let duplicateServerId: number | undefined;
             const p = JSON.parse(item.payload);
-            
+
             if (item.entity_type === 'meal') {
               const meals = await api.get<any[]>(`/meals?date=${p.logged_date}`);
               const existing = meals?.find((m) => m.food_name === p.food_name && m.meal_type === p.meal_type);
@@ -159,7 +159,7 @@ export class SyncService {
               const existing = weights?.find((w) => w.weight_kg === p.weight_kg);
               if (existing?.id) duplicateServerId = existing.id;
             }
-            
+
             if (duplicateServerId) {
               await this.updateEntryAfterSuccess(item, duplicateServerId);
               await this.queueRepo.markDone(item.id);
@@ -188,9 +188,6 @@ export class SyncService {
     }
   }
 
-  // ─────────────────────────────────────────────────────────
-  // Dispatch API call by entity type
-  // ─────────────────────────────────────────────────────────
 
   private async callApi(
     entityType: EntityType,
@@ -198,7 +195,6 @@ export class SyncService {
     payload: unknown
   ): Promise<number | undefined> {
     switch (entityType) {
-      // ── Weight (wired) ────────────────────────────────────
       case 'weight': {
         if (operation === 'CREATE') {
           const p = payload as WeightCreatePayload;
@@ -215,7 +211,6 @@ export class SyncService {
         }
       }
 
-      // ── Meal (stub — backend endpoint not yet available) ──
       case 'meal': {
         if (operation === 'CREATE') {
           const p = payload as MealCreatePayload;
@@ -291,8 +286,8 @@ export class SyncService {
             try {
               const profileRepo = new ProfileRepository(this.db);
               const serverProfile = await api.get<any>("/profile");
-              
-              const currentUserId = serverProfile.user_id || 1; 
+
+              const currentUserId = serverProfile.user_id || 1;
 
               await profileRepo.upsertProfile({
                 user_id: currentUserId,
