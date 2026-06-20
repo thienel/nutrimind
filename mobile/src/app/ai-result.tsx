@@ -18,6 +18,8 @@ import {
 } from "lucide-react-native";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { OfflineEmptyState } from "@/components/OfflineEmptyState";
+import { useNetwork } from "@/context/NetworkContext";
 import { useToast } from "@/components/ToastProvider";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -51,6 +53,7 @@ export default function AIResultScreen() {
   const params = useLocalSearchParams();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { isOnline } = useNetwork();
 
   const [mealType, setMealType] = useState<MealType>("lunch");
   const [isSaving, setIsSaving] = useState(false);

@@ -6,7 +6,10 @@
  * - Expose loading/error states cho UI
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { useSQLiteContext } from "expo-sqlite";
+import { useNetwork } from "@/context/NetworkContext";
+import { fetchAndCacheDate } from "@/services/initialData.service";
 import {
   insertMeal,
   deleteMeal,
@@ -45,7 +48,7 @@ export function useMealLog(
   userId: number | null,
   date?: string
 ): UseMealLogReturn {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA');
   const targetDate = date ?? today;
 
   const [meals, setMeals] = useState<MealEntry[]>([]);
@@ -59,6 +62,10 @@ export function useMealLog(
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
+  const db = useSQLiteContext();
+  const { isOnline, triggerSync } = useNetwork();
+  const fetchedDatesRef = useRef<Set<string>>(new Set());
+
   const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
 
   useEffect(() => {
@@ -68,10 +75,27 @@ export function useMealLog(
     setIsLoading(true);
     setError(null);
 
-    Promise.all([
-      getMealsByDate(userId, targetDate),
-      getDailyMacros(userId, targetDate),
-    ])
+    const checkAndFetchOnDemand = async () => {
+      try {
+        const todayObj = new Date(today);
+        const targetObj = new Date(targetDate);
+        const diffDays = Math.floor((todayObj.getTime() - targetObj.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 7 && isOnline && !fetchedDatesRef.current.has(targetDate)) {
+          fetchedDatesRef.current.add(targetDate);
+          await fetchAndCacheDate(db, userId, targetDate);
+        }
+      } catch (e) {
+        console.warn("[useMealLog] checkAndFetchOnDemand failed", e);
+      }
+    };
+
+    checkAndFetchOnDemand().then(() => {
+      return Promise.all([
+        getMealsByDate(userId, targetDate),
+        getDailyMacros(userId, targetDate),
+      ]);
+    })
       .then(([mealList, dailyMacros]) => {
         if (cancelled) return;
         setMeals(mealList);
@@ -96,6 +120,7 @@ export function useMealLog(
       try {
         const id = await insertMeal({ ...data, userId });
         refresh();
+        triggerSync();
         return id;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Lỗi lưu bữa ăn";
@@ -103,7 +128,7 @@ export function useMealLog(
         return null;
       }
     },
-    [userId, refresh]
+    [userId, refresh, triggerSync]
   );
 
   const removeMeal = useCallback(
@@ -112,12 +137,13 @@ export function useMealLog(
       try {
         await deleteMeal(id, userId);
         refresh();
+        triggerSync();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Lỗi xóa bữa ăn";
         setError(msg);
       }
     },
-    [userId, refresh]
+    [userId, refresh, triggerSync]
   );
 
   return { meals, macros, isLoading, error, logMeal, removeMeal, refresh };

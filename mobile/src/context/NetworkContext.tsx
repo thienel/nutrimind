@@ -17,6 +17,7 @@ import NetInfo, {
   NetInfoState,
   NetInfoSubscription,
 } from "@react-native-community/netinfo";
+import { AppState, AppStateStatus } from "react-native";
 import { useSQLiteContext } from "expo-sqlite";
 import { SyncService } from "@/services/sync.service";
 
@@ -27,6 +28,10 @@ interface NetworkContextValue {
   connectionType: string;
   /** Số lượng items đang chờ sync (cập nhật sau mỗi lần sync) */
   pendingSyncCount: number;
+  /** true nếu hệ thống đang gọi API sync */
+  isSyncing: boolean;
+  /** true nếu vừa sync thành công, biến mất sau vài giây */
+  showSyncSuccess: boolean;
   /** Kích hoạt sync thủ công */
   triggerSync(): void;
 }
@@ -50,21 +55,31 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
   const [isOnline, setIsOnline] = useState(true);
   const [connectionType, setConnectionType] = useState("unknown");
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showSyncSuccess, setShowSyncSuccess] = useState(false);
 
   // Tránh trigger sync nhiều lần liên tiếp
-  const isSyncing = useRef(false);
+  const isSyncingRef = useRef(false);
   const prevOnline = useRef(true);
 
   const triggerSync = useCallback(async () => {
-    if (isSyncing.current || !userId) return;
-    isSyncing.current = true;
+    if (isSyncingRef.current || !userId) return;
+    isSyncingRef.current = true;
+    setIsSyncing(true);
     try {
       const syncService = new SyncService(db);
-      await syncService.runSync();
+      const result = await syncService.runSync();
       const remaining = await syncService.getPendingCount();
       setPendingSyncCount(remaining);
+      
+      // Nếu có items được sync thành công
+      if (result.synced > 0) {
+        setShowSyncSuccess(true);
+        setTimeout(() => setShowSyncSuccess(false), 2500);
+      }
     } finally {
-      isSyncing.current = false;
+      isSyncingRef.current = false;
+      setIsSyncing(false);
     }
   }, [userId, db]);
 
@@ -92,13 +107,31 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
       }
     );
 
-    return () => unsub();
+    // Kích hoạt sync khi app quay lại từ background (Foreground Trigger)
+    const appStateSub = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        triggerSync();
+      }
+    });
+
+    // Quét hàng đợi tự động mỗi 15 phút (Background Interval)
+    const intervalId = setInterval(() => {
+      triggerSync();
+    }, 15 * 60 * 1000);
+
+    return () => {
+      unsub();
+      appStateSub.remove();
+      clearInterval(intervalId);
+    };
   }, [triggerSync]);
 
   const value: NetworkContextValue = {
     isOnline,
     connectionType,
     pendingSyncCount,
+    isSyncing,
+    showSyncSuccess,
     triggerSync,
   };
 
