@@ -160,14 +160,14 @@ export function PersonalInformation() {
           await AsyncStorage.setItem(
             "nutrimind_profile_cache",
             JSON.stringify({
-              fullName: createdProfile.display_name ?? "",
-              email: createdProfile.email ?? "",
-              age: createdProfile.age?.toString() ?? "",
-              gender: createdProfile.gender ?? "",
-              height: createdProfile.height_cm?.toString() ?? "",
-              weight: createdProfile.weight_kg?.toString() ?? "",
-              goal: createdProfile.goal ?? "",
-              photoUrl: createdProfile.avatar_url,
+              fullName: "", // fallback to user.display_name
+              email: "",    // fallback to user.email
+              age: payload.age.toString(),
+              gender: payload.gender,
+              height: payload.height_cm.toString(),
+              weight: payload.weight_kg.toString(),
+              goal: payload.goal,
+              photoUrl: "",
               waterTargetMl: createdProfile.water_target_ml,
             }),
           );

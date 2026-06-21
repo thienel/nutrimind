@@ -12,6 +12,7 @@
  */
 
 import * as SQLite from "expo-sqlite";
+import { ALL_DDL } from "../db/schema";
 
 const DB_NAME = "nutrimind_v2.db";
 const SCHEMA_VERSION = 1;
@@ -49,78 +50,11 @@ export async function initDatabase(): Promise<void> {
 }
 
 async function migrateV1(db: SQLite.SQLiteDatabase): Promise<void> {
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS meal_entries (
-      id          TEXT    PRIMARY KEY,
-      user_id     INTEGER NOT NULL,
-      name        TEXT    NOT NULL,
-      calories    REAL    NOT NULL DEFAULT 0,
-      protein_g   REAL    DEFAULT 0,
-      carbs_g     REAL    DEFAULT 0,
-      fat_g       REAL    DEFAULT 0,
-      meal_type   TEXT    NOT NULL DEFAULT 'other',
-      logged_at   TEXT    NOT NULL,
-      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-      is_deleted  INTEGER NOT NULL DEFAULT 0,
-      server_id   TEXT
-    );
-  `);
-
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS water_logs (
-      id          TEXT    PRIMARY KEY,
-      user_id     INTEGER NOT NULL,
-      amount_ml   REAL    NOT NULL,
-      logged_at   TEXT    NOT NULL,
-      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-      is_deleted  INTEGER NOT NULL DEFAULT 0,
-      server_id   TEXT
-    );
-  `);
-
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS weight_logs (
-      id          TEXT    PRIMARY KEY,
-      user_id     INTEGER NOT NULL,
-      weight_kg   REAL    NOT NULL,
-      note        TEXT,
-      logged_at   TEXT    NOT NULL,
-      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-      is_deleted  INTEGER NOT NULL DEFAULT 0,
-      server_id   TEXT
-    );
-  `);
-
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS sync_queue (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      action      TEXT    NOT NULL,
-      entity      TEXT    NOT NULL,
-      local_id    TEXT    NOT NULL,
-      payload     TEXT    NOT NULL,
-      status      TEXT    NOT NULL DEFAULT 'pending',
-      retries     INTEGER NOT NULL DEFAULT 0,
-      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-      synced_at   TEXT
-    );
-  `);
-
-  await db.execAsync(
-    "CREATE INDEX IF NOT EXISTS idx_meal_user_date ON meal_entries(user_id, logged_at);"
-  );
-
-  await db.execAsync(
-    "CREATE INDEX IF NOT EXISTS idx_water_user_date ON water_logs(user_id, logged_at);"
-  );
-
-  await db.execAsync(
-    "CREATE INDEX IF NOT EXISTS idx_weight_user_date ON weight_logs(user_id, logged_at);"
-  );
-
-  await db.execAsync(
-    "CREATE INDEX IF NOT EXISTS idx_sync_status ON sync_queue(status);"
-  );
-
+  // Force drop sync_queue to avoid any schema mismatch with next_retry_at during dev
+  await db.execAsync("DROP TABLE IF EXISTS sync_queue;");
+  for (const sql of ALL_DDL) {
+    await db.execAsync(sql);
+  }
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
 }
 
@@ -129,10 +63,11 @@ export async function clearUserData(userId: number): Promise<void> {
   const db = await getDb();
 
   await db.withTransactionAsync(async () => {
-    await db.runAsync("DELETE FROM meal_entries WHERE user_id = ?;", [userId]);
-    await db.runAsync("DELETE FROM water_logs WHERE user_id = ?;", [userId]);
-    await db.runAsync("DELETE FROM weight_logs WHERE user_id = ?;", [userId]);
-    await db.runAsync("DELETE FROM sync_queue WHERE status = 'pending';");
+    await db.runAsync("DELETE FROM local_profile;");
+    await db.runAsync("DELETE FROM local_meal_entries WHERE user_id = ?;", [userId]);
+    await db.runAsync("DELETE FROM local_water_entries WHERE user_id = ?;", [userId]);
+    await db.runAsync("DELETE FROM local_weight_entries WHERE user_id = ?;", [userId]);
+    await db.runAsync("DELETE FROM sync_queue;");
   });
 }
 
