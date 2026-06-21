@@ -53,11 +53,11 @@ func (r *mealEntryRepositoryImpl) List(ctx context.Context, offset, limit int, _
 	var entries []entity.MealEntry
 	var total int64
 
-	q := r.db.WithContext(ctx).Model(&entity.MealEntry{})
-	if err := q.Count(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.MealEntry{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "meal entry")
 	}
-	if err := q.Order("logged_date DESC, created_at DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.MealEntry{}).
+		Order("logged_date DESC, created_at DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
 		return nil, 0, wrapListError(err, "meal entry")
 	}
 	return entries, total, nil

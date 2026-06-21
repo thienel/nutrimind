@@ -53,11 +53,11 @@ func (r *waterEntryRepositoryImpl) List(ctx context.Context, offset, limit int, 
 	var entries []entity.WaterEntry
 	var total int64
 
-	q := r.db.WithContext(ctx).Model(&entity.WaterEntry{})
-	if err := q.Count(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.WaterEntry{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "water entry")
 	}
-	if err := q.Order("logged_date DESC, created_at DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.WaterEntry{}).
+		Order("logged_date DESC, created_at DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
 		return nil, 0, wrapListError(err, "water entry")
 	}
 	return entries, total, nil

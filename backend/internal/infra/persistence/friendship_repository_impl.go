@@ -50,11 +50,12 @@ func (r *friendshipRepositoryImpl) Delete(ctx context.Context, id uint) error {
 func (r *friendshipRepositoryImpl) List(ctx context.Context, offset, limit int, _ query.QueryOptions) ([]entity.Friendship, int64, error) {
 	var fs []entity.Friendship
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.Friendship{})
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.Friendship{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "friendship")
 	}
-	if err := q.Offset(offset).Limit(limit).Find(&fs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.Friendship{}).
+		Offset(offset).Limit(limit).Find(&fs).Error; err != nil {
 		return nil, 0, wrapListError(err, "friendship")
 	}
 	return fs, total, nil

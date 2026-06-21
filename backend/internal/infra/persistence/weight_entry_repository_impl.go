@@ -59,11 +59,11 @@ func (r *weightEntryRepositoryImpl) List(ctx context.Context, offset, limit int,
 	var entries []entity.WeightEntry
 	var total int64
 
-	q := r.db.WithContext(ctx).Model(&entity.WeightEntry{})
-	if err := q.Count(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.WeightEntry{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "weight entry")
 	}
-	if err := q.Order("date DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.WeightEntry{}).
+		Order("logged_at DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
 		return nil, 0, wrapListError(err, "weight entry")
 	}
 	return entries, total, nil
@@ -108,12 +108,11 @@ func (r *weightEntryRepositoryImpl) ListByUserID(ctx context.Context, userID uin
 	var entries []entity.WeightEntry
 	var total int64
 
-	q := r.db.WithContext(ctx).Model(&entity.WeightEntry{}).Where("user_id = ?", userID)
-
-	if err := q.Count(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.WeightEntry{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "weight entry")
 	}
-	if err := q.Order("logged_at DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.WeightEntry{}).Where("user_id = ?", userID).
+		Order("logged_at DESC").Offset(offset).Limit(limit).Find(&entries).Error; err != nil {
 		return nil, 0, wrapListError(err, "weight entry")
 	}
 	return entries, total, nil

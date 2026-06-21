@@ -52,11 +52,12 @@ func (r *notificationLogRepositoryImpl) Delete(ctx context.Context, id uint) err
 func (r *notificationLogRepositoryImpl) List(ctx context.Context, offset, limit int, _ query.QueryOptions) ([]entity.NotificationLog, int64, error) {
 	var logs []entity.NotificationLog
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.NotificationLog{})
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.NotificationLog{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "notification log")
 	}
-	if err := q.Order("created_at DESC").Offset(offset).Limit(limit).Find(&logs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.NotificationLog{}).
+		Order("created_at DESC").Offset(offset).Limit(limit).Find(&logs).Error; err != nil {
 		return nil, 0, wrapListError(err, "notification log")
 	}
 	return logs, total, nil
@@ -73,11 +74,12 @@ func (r *notificationLogRepositoryImpl) Exists(ctx context.Context, id uint) (bo
 func (r *notificationLogRepositoryImpl) ListByUserID(ctx context.Context, userID uint, offset, limit int) ([]entity.NotificationLog, int64, error) {
 	var logs []entity.NotificationLog
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.NotificationLog{}).Where("user_id = ?", userID)
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.NotificationLog{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "notification log")
 	}
-	if err := q.Order("created_at DESC").Offset(offset).Limit(limit).Find(&logs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.NotificationLog{}).Where("user_id = ?", userID).
+		Order("created_at DESC").Offset(offset).Limit(limit).Find(&logs).Error; err != nil {
 		return nil, 0, wrapListError(err, "notification log")
 	}
 	return logs, total, nil

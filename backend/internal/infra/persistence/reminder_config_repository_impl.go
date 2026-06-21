@@ -51,11 +51,12 @@ func (r *reminderConfigRepositoryImpl) Delete(ctx context.Context, id uint) erro
 func (r *reminderConfigRepositoryImpl) List(ctx context.Context, offset, limit int, _ query.QueryOptions) ([]entity.ReminderConfig, int64, error) {
 	var configs []entity.ReminderConfig
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.ReminderConfig{})
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.ReminderConfig{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "reminder config")
 	}
-	if err := q.Offset(offset).Limit(limit).Find(&configs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.ReminderConfig{}).
+		Offset(offset).Limit(limit).Find(&configs).Error; err != nil {
 		return nil, 0, wrapListError(err, "reminder config")
 	}
 	return configs, total, nil
