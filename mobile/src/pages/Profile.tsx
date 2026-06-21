@@ -17,6 +17,7 @@ import {
   CircleHelp,
   Info,
   LogOut,
+  RefreshCcw,
   Scale,
   Target,
   UserRound,
@@ -173,6 +174,13 @@ export function Profile() {
             icon={Scale}
             title="Weight Tracking"
             onPress={() => router.push("/weight")}
+          />
+
+          {/* Sync trạng thái đồng bộ */}
+          <MenuItem
+            icon={RefreshCcw}
+            title="Sync Status"
+            onPress={() => router.push("/sync-status")}
           />
 
           {/* Nhắc nhở thông minh */}

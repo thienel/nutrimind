@@ -6,6 +6,7 @@
 
 import { getDb, generateUUID } from "@/lib/db";
 import { enqueue } from "@/lib/repositories/syncQueue";
+import { toLocalDateKey } from "@/lib/dateUtils";
 
 export interface WaterLog {
   id: string;
@@ -31,21 +32,23 @@ export async function logWater(data: InsertWaterData): Promise<string> {
   const db = await getDb();
   const id = generateUUID();
   const loggedAt = data.loggedAt ?? new Date().toISOString();
-  const loggedDate = loggedAt.slice(0, 10);
+  const loggedDate = toLocalDateKey(loggedAt);
   const now = new Date().toISOString();
 
-  await db.runAsync(
-    `INSERT INTO local_water_entries (
-      local_id, server_id, user_id, volume_ml, logged_date,
-      client_created_at, sync_status, sync_attempts, last_sync_error, created_at
-    ) VALUES (?, NULL, ?, ?, ?, ?, 'pending', 0, NULL, ?);`,
-    [id, data.userId, data.amountMl, loggedDate, loggedAt, now]
-  );
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO local_water_entries (
+        local_id, server_id, user_id, volume_ml, logged_date,
+        client_created_at, sync_status, sync_attempts, last_sync_error, created_at
+      ) VALUES (?, NULL, ?, ?, ?, ?, 'pending', 0, NULL, ?);`,
+      [id, data.userId, data.amountMl, loggedDate, loggedAt, now]
+    );
 
-  await enqueue("create", "water", id, {
-    local_id: id,
-    amount_ml: data.amountMl,
-    logged_at: loggedAt,
+    await enqueue("create", "water", id, {
+      local_id: id,
+      amount_ml: data.amountMl,
+      logged_at: loggedAt,
+    });
   });
 
   return id;
@@ -149,12 +152,28 @@ export async function deleteWaterLog(
   userId: number
 ): Promise<void> {
   const db = await getDb();
-  await db.runAsync(
-    `UPDATE local_water_entries
-     SET sync_status = 'deleted_pending'
-     WHERE local_id = ? AND user_id = ?;`,
-    [id, userId]
-  );
-  await enqueue("delete", "water", id, { local_id: id });
+  await db.withTransactionAsync(async () => {
+    const entry = await db.getFirstAsync<{ server_id: string | null }>(
+      `SELECT server_id FROM local_water_entries WHERE local_id = ? AND user_id = ?;`,
+      [id, userId]
+    );
+
+    if (!entry) return;
+
+    if (entry.server_id == null) {
+      // Trường hợp A
+      await db.runAsync(`DELETE FROM local_water_entries WHERE local_id = ?;`, [id]);
+      await db.runAsync(`DELETE FROM sync_queue WHERE local_id = ?;`, [id]);
+    } else {
+      // Trường hợp B & C
+      await db.runAsync(
+        `UPDATE local_water_entries
+         SET sync_status = 'deleted_pending'
+         WHERE local_id = ? AND user_id = ?;`,
+        [id, userId]
+      );
+      await enqueue("delete", "water", id, { server_id: Number(entry.server_id) });
+    }
+  });
 }
 

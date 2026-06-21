@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState } from "react-native";
 import { router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 
@@ -119,6 +119,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Tránh double-run startup check (React 18 StrictMode)
   const startupRan = useRef(false);
+
+  // ── AppState listener (spec §11.6: pull data sau 30 phút ở background) ──
+  const lastBackgroundTime = useRef<number>(Date.now());
+  const isPullingRef = useRef(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "background" || nextAppState === "inactive") {
+        lastBackgroundTime.current = Date.now();
+      } else if (nextAppState === "active") {
+        const timeInBackground = Date.now() - lastBackgroundTime.current;
+        // 30 phút = 30 * 60 * 1000 = 1800000 ms
+        if (timeInBackground >= 1800000 && !isPullingRef.current) {
+          isPullingRef.current = true;
+          console.log(
+            "[AuthContext] App in background for >30m. Pulling data...",
+          );
+          pullInitialData(db, user.id).finally(() => {
+            isPullingRef.current = false;
+          });
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user?.id, db]);
 
   // ── Helper: lưu token + cập nhật state ──────────────────────────────────
   const persistAuth = useCallback(async (resp: AuthTokenResponse) => {
@@ -286,14 +316,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ── Google Sign-In (spec §2.5) ────────────────────────────────────────────
   const googleSignIn = useCallback(async () => {
-    const idToken = await getGoogleIdToken();
-    if (!idToken) return; // User cancel → không làm gì
+    try {
+      const idToken = await getGoogleIdToken();
 
-    const resp = await api.post<AuthTokenResponse>("/auth/google", {
-      id_token: idToken,
-    });
-    await persistAuth(resp);
-    await navigateAfterAuth(resp.is_first_login);
+      // user bấm cancel → không làm gì
+      if (!idToken) return;
+
+      // gửi Google id_token lên backend để login
+      const resp = await api.post<AuthTokenResponse>("/auth/google", {
+        id_token: idToken,
+      });
+
+      // lưu token + user vào storage/context
+      await persistAuth(resp);
+
+      // điều hướng sau login
+      // chỉ cần truyền is_first_login
+      await navigateAfterAuth(resp.is_first_login);
+    } catch (error: any) {
+      // log lỗi để debug
+      console.error("Google SignIn Error:", error);
+
+      // show lỗi cho user
+      Alert.alert("Lỗi đăng nhập", error?.message || JSON.stringify(error));
+    }
   }, [persistAuth, navigateAfterAuth]);
 
   // ── Manual Sign-Out (spec §2.10) ──────────────────────────────────────────

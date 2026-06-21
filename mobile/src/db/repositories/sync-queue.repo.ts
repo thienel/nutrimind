@@ -57,7 +57,7 @@ export class SyncQueueRepository {
       `SELECT * FROM sync_queue
        WHERE status = 'pending'
          AND (next_retry_at IS NULL OR next_retry_at <= ?)
-       ORDER BY created_at ASC
+       ORDER BY CASE WHEN operation = 'DELETE' OR operation = 'delete' THEN 1 ELSE 2 END ASC, created_at ASC
        LIMIT ?`,
       [now, limit]
     );
@@ -73,7 +73,7 @@ export class SyncQueueRepository {
        WHERE status = 'failed'
          AND attempts < max_attempts
          AND (next_retry_at IS NULL OR next_retry_at <= ?)
-       ORDER BY created_at ASC`,
+       ORDER BY CASE WHEN operation = 'DELETE' OR operation = 'delete' THEN 1 ELSE 2 END ASC, created_at ASC`,
       [now]
     );
   }
@@ -129,6 +129,17 @@ export class SyncQueueRepository {
         nextRetry,
         id,
       ]
+    );
+  }
+
+  /**
+   * Restore a queue item back to pending without increasing attempts
+   * (Used for auth errors like 401 where the failure is not related to the request payload)
+   */
+  async restorePending(id: string): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE sync_queue SET status = 'pending' WHERE id = ?`,
+      [id]
     );
   }
 
@@ -195,5 +206,39 @@ export class SyncQueueRepository {
       result[row.status] = row.count;
     }
     return result as Record<SyncQueueStatus, number>;
+  }
+
+  /**
+   * Lấy toàn bộ các mục bị failed (kể cả quá số lần thử) để hiển thị lên giao diện.
+   */
+  async getAllFailedItems(): Promise<SyncQueueItem[]> {
+    return this.db.getAllAsync<SyncQueueItem>(
+      `SELECT * FROM sync_queue WHERE status = 'failed' ORDER BY created_at DESC`
+    );
+  }
+
+  /**
+   * (Mục 10.3) Thử lại tất cả các mục failed: chuyển thành pending, reset attempts.
+   */
+  async retryAllFailed(): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE sync_queue
+       SET status = 'pending',
+           attempts = 0,
+           last_error = NULL,
+           next_retry_at = NULL
+       WHERE status = 'failed'`
+    );
+  }
+
+  /**
+   * (Mục 10.3) Bỏ qua tất cả các mục failed: chuyển thành dismissed.
+   */
+  async dismissAllFailed(): Promise<void> {
+    await this.db.runAsync(
+      `UPDATE sync_queue
+       SET status = 'dismissed'
+       WHERE status = 'failed'`
+    );
   }
 }

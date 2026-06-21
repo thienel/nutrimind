@@ -5,7 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "nutrimind",
+    "scheme": [
+      "nutrimind",
+      "com.googleusercontent.apps.554505712919-q2fa9c9hhff9c1r6t700lmb0boj5p9g2"
+    ],
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.nutrimind.app",

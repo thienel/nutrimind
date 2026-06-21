@@ -23,28 +23,9 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import { useAuth } from "@/context/AuthContext";
-import { getDailyMacros } from "@/lib/repositories/mealRepository";
+import { getDashboardData, DashboardData } from "@/db/repositories/dashboard.repo";
 
 import { getLocalDateKey } from "@/lib/dateUtils";
-
-const DAILY_CALORIE_GOAL = 2000;
-const PROTEIN_GOAL = 120;
-const CARBS_GOAL = 250;
-const FAT_GOAL = 65;
-
-type DailyMacros = {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-};
-
-const EMPTY_DAILY_MACROS: DailyMacros = {
-  calories: 0,
-  protein: 0,
-  carbs: 0,
-  fat: 0,
-};
 
 function getTodayKey() {
   return getLocalDateKey();
@@ -68,9 +49,8 @@ export default function HomeScreen() {
   const { user } = useAuth();
 
   const [showWeightModal, setShowWeightModal] = useState(false);
-  const [weight, setWeight] = useState("68.5");
-  const [dailyMacros, setDailyMacros] =
-    useState<DailyMacros>(EMPTY_DAILY_MACROS);
+  const [weightInput, setWeightInput] = useState("");
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
 
   const userId = useMemo(() => getNumericUserId(user?.id), [user?.id]);
 
@@ -80,35 +60,31 @@ export default function HomeScreen() {
     return rawName.trim() || "there";
   }, [user?.display_name, user?.email]);
 
-  const calorieProgress = Math.min(
-    dailyMacros.calories / DAILY_CALORIE_GOAL,
-    1
-  );
+  const calorieProgress = dashboardData 
+    ? Math.min(dashboardData.calories.logged / dashboardData.calories.target, 1) 
+    : 0;
 
-  const onTrack =
-    dailyMacros.calories > 0 && dailyMacros.calories <= DAILY_CALORIE_GOAL;
+  const onTrack = dashboardData 
+    ? dashboardData.calories.logged > 0 && dashboardData.calories.logged <= dashboardData.calories.target
+    : true;
 
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
 
-      async function loadTodayMacros() {
+      async function loadDashboard() {
         try {
-          const macros = await getDailyMacros(userId, getTodayKey());
+          const data = await getDashboardData(userId, getTodayKey());
 
           if (!isActive) return;
 
-          setDailyMacros(macros);
+          setDashboardData(data);
         } catch (error) {
-          console.warn("[HomeScreen] Failed to load daily macros:", error);
-
-          if (!isActive) return;
-
-          setDailyMacros(EMPTY_DAILY_MACROS);
+          console.warn("[HomeScreen] Failed to load dashboard data:", error);
         }
       }
 
-      loadTodayMacros();
+      loadDashboard();
 
       return () => {
         isActive = false;
@@ -146,15 +122,15 @@ export default function HomeScreen() {
                 styles.progressCircle,
                 {
                   borderColor:
-                    dailyMacros.calories > DAILY_CALORIE_GOAL
+                    (dashboardData?.calories.logged || 0) > (dashboardData?.calories.target || 2000)
                       ? "#EF4444"
                       : "#10B981",
-                  opacity: dailyMacros.calories > 0 ? 1 : 0.55,
+                  opacity: (dashboardData?.calories.logged || 0) > 0 ? 1 : 0.55,
                 },
               ]}
             >
-              <Text style={styles.kcal}>{Math.round(dailyMacros.calories)}</Text>
-              <Text style={styles.kcalSub}>/ {DAILY_CALORIE_GOAL} kcal</Text>
+              <Text style={styles.kcal}>{Math.round(dashboardData?.calories.logged || 0)}</Text>
+              <Text style={styles.kcalSub}>/ {dashboardData?.calories.target || 2000} kcal</Text>
               <Text style={styles.kcalPercent}>
                 {Math.round(calorieProgress * 100)}%
               </Text>
@@ -163,17 +139,17 @@ export default function HomeScreen() {
             <View style={styles.macroWrap}>
               <Macro
                 label="Protein"
-                value={formatMacroValue(dailyMacros.protein, PROTEIN_GOAL)}
+                value={formatMacroValue(dashboardData?.protein.logged || 0, dashboardData?.protein.target || 120)}
                 color="#8B5CF6"
               />
               <Macro
                 label="Carbs"
-                value={formatMacroValue(dailyMacros.carbs, CARBS_GOAL)}
+                value={formatMacroValue(dashboardData?.carbs.logged || 0, dashboardData?.carbs.target || 250)}
                 color="#06B6D4"
               />
               <Macro
                 label="Fat"
-                value={formatMacroValue(dailyMacros.fat, FAT_GOAL)}
+                value={formatMacroValue(dashboardData?.fat.logged || 0, dashboardData?.fat.target || 65)}
                 color="#F59E0B"
               />
             </View>
@@ -182,16 +158,16 @@ export default function HomeScreen() {
           <View
             style={[
               styles.trackBox,
-              dailyMacros.calories > DAILY_CALORIE_GOAL && styles.warningBox,
+              !onTrack && (dashboardData?.calories.logged || 0) > 0 && styles.warningBox,
             ]}
           >
             <Text
               style={[
                 styles.trackText,
-                dailyMacros.calories > DAILY_CALORIE_GOAL && styles.warningText,
+                !onTrack && (dashboardData?.calories.logged || 0) > 0 && styles.warningText,
               ]}
             >
-              {dailyMacros.calories <= 0
+              {(dashboardData?.calories.logged || 0) <= 0
                 ? "🍽️ Log your first meal to start tracking"
                 : onTrack
                   ? "💚 You’re on track! Keep it up"
@@ -251,8 +227,16 @@ export default function HomeScreen() {
             <View style={styles.weightTop}>
               <View>
                 <Text style={styles.weightLabel}>Weekly Weight Check</Text>
-                <Text style={styles.weight}>{weight} kg</Text>
-                <Text style={styles.weightSub}>Last updated 7 days ago</Text>
+                <Text style={styles.weight}>
+                  {dashboardData?.weight ? `${dashboardData.weight.latest_kg} kg` : "-- kg"}
+                </Text>
+                <Text style={styles.weightSub}>
+                  {dashboardData?.weight 
+                    ? dashboardData.weight.days_ago === 0 
+                      ? "Updated today" 
+                      : `Last updated ${dashboardData.weight.days_ago} days ago`
+                    : "No weight logged yet"}
+                </Text>
               </View>
 
               <View style={styles.weightIcon}>
@@ -371,8 +355,8 @@ export default function HomeScreen() {
 
             <TextInput
               style={styles.input}
-              value={weight}
-              onChangeText={setWeight}
+              value={weightInput}
+              onChangeText={setWeightInput}
               keyboardType="numeric"
             />
 

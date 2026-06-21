@@ -2,7 +2,10 @@
  * useWaterLog — hook quản lý water intake
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { useSQLiteContext } from "expo-sqlite";
+import { useNetwork } from "@/context/NetworkContext";
+import { fetchAndCacheDate } from "@/services/initialData.service";
 import {
   logWater,
   deleteWaterLog,
@@ -34,7 +37,7 @@ export function useWaterLog(
   userId: number | null,
   date?: string
 ): UseWaterLogReturn {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString('en-CA');
   const targetDate = date ?? today;
 
   const [logs, setLogs] = useState<WaterLog[]>([]);
@@ -42,6 +45,10 @@ export function useWaterLog(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  const db = useSQLiteContext();
+  const { isOnline, triggerSync } = useNetwork();
+  const fetchedDatesRef = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
 
@@ -53,10 +60,27 @@ export function useWaterLog(
     let cancelled = false;
     setIsLoading(true);
 
-    Promise.all([
-      getWaterByDate(numericUserId, targetDate),
-      getDailyWaterTotal(numericUserId, targetDate),
-    ])
+    const checkAndFetchOnDemand = async () => {
+      try {
+        const todayObj = new Date(today);
+        const targetObj = new Date(targetDate);
+        const diffDays = Math.floor((todayObj.getTime() - targetObj.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 7 && isOnline && !fetchedDatesRef.current.has(targetDate)) {
+          fetchedDatesRef.current.add(targetDate);
+          await fetchAndCacheDate(db, numericUserId, targetDate);
+        }
+      } catch (e) {
+        console.warn("[useWaterLog] checkAndFetchOnDemand failed", e);
+      }
+    };
+
+    checkAndFetchOnDemand().then(() => {
+      return Promise.all([
+        getWaterByDate(numericUserId, targetDate),
+        getDailyWaterTotal(numericUserId, targetDate),
+      ]);
+    })
       .then(([waterLogs, total]) => {
         if (cancelled) return;
         setLogs(waterLogs);
@@ -81,6 +105,7 @@ export function useWaterLog(
       try {
         const id = await logWater({ userId: numericUserId, amountMl });
         refresh();
+        triggerSync();
         return id;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Lỗi lưu lượng nước";
@@ -88,7 +113,7 @@ export function useWaterLog(
         return null;
       }
     },
-    [numericUserId, refresh]
+    [numericUserId, refresh, triggerSync]
   );
 
   const removeWater = useCallback(
@@ -97,12 +122,13 @@ export function useWaterLog(
       try {
         await deleteWaterLog(id, numericUserId);
         refresh();
+        triggerSync();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Lỗi xóa";
         setError(msg);
       }
     },
-    [numericUserId, refresh]
+    [numericUserId, refresh, triggerSync]
   );
 
   return { logs, totalMl, isLoading, error, addWater, removeWater, refresh };
