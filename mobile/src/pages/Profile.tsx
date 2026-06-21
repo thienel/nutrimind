@@ -1,19 +1,12 @@
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import LogoutModal from "@/components/LogoutModal";
 import { StaleDataBanner } from "@/components/StaleDataBanner";
 import { OfflineBanner } from "@/components/OfflineBanner";
 
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -32,11 +25,42 @@ import {
 import { useOfflineProfile } from "@/hooks/useOfflineProfile";
 import { useAuth } from "@/context/AuthContext";
 
+// =======================================================
+// Danh sách màu avatar random
+// Dùng để tạo avatar chữ cái đầu giống Friends page
+// =======================================================
+const avatarColors = ["#06B6D4", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
+
 export function Profile() {
+  // lấy thông tin auth và hàm logout
   const { signOut, user } = useAuth();
-  const { profile, isStale, lastUpdated, isLoading } = useOfflineProfile();
+
+  // hook lấy profile từ cache hoặc server
+  const { profile, isStale, lastUpdated, refresh } = useOfflineProfile();
+
+  // state bật/tắt modal logout
   const [showLogout, setShowLogout] = useState(false);
 
+  // =======================================================
+  // Mỗi lần focus lại màn Profile
+  // -> refresh lại dữ liệu mới nhất
+  //
+  // Dùng để:
+  // - update goal ngay sau khi save Personal Information
+  // - update weight mới
+  // - update profile mới nhất mà không cần reload app
+  // =======================================================
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh]),
+  );
+
+  // =======================================================
+  // Dữ liệu hiển thị
+  // Ưu tiên profile cache/server
+  // fallback sang auth user nếu chưa có
+  // =======================================================
   const displayProfile = {
     fullName: profile?.fullName || user?.display_name || "—",
     email: profile?.email || user?.email || "—",
@@ -44,42 +68,66 @@ export function Profile() {
     gender: profile?.gender || "—",
     height: profile?.height || "—",
     weight: profile?.weight || "—",
-    goalWeight: profile?.goalWeight || "—",
-    photoUrl: profile?.photoUrl || user?.photo_url,
+    goal: profile?.goal || "MAINTAIN",
+  };
+
+  // =======================================================
+  // Tạo màu avatar cố định dựa vào user id
+  // cùng user sẽ luôn ra cùng màu
+  // =======================================================
+  const avatarColor = avatarColors[(user?.id ?? 0) % avatarColors.length];
+
+  // =======================================================
+  // Convert goal enum từ backend thành text dễ đọc
+  // =======================================================
+  const getGoalText = () => {
+    const goalMap: Record<string, string> = {
+      LOSE_WEIGHT: "Lose weight & stay lean",
+      GAIN_MUSCLE: "Build muscle stronger",
+      MAINTAIN: "Maintain current body",
+      EAT_HEALTHIER: "Improve eating habits",
+    };
+
+    return goalMap[displayProfile.goal] || "Stay healthy";
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Banner báo offline */}
       <OfflineBanner pushContent />
+
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Stale data banner khi offline */}
+        {/* Nếu đang dùng cache cũ thì hiện cảnh báo stale */}
         {isStale && (
-          <View style={{ paddingHorizontal: 0, paddingTop: 8 }}>
+          <View style={{ paddingTop: 8 }}>
             <StaleDataBanner lastUpdated={lastUpdated} />
           </View>
         )}
+
         {/* Header */}
         <View>
           <Text style={styles.title}>My Profile</Text>
-
           <Text style={styles.subtitle}>Manage your health profile</Text>
         </View>
 
-        {/* Avatar */}
+        {/* =======================================================
+            Avatar dạng chữ cái đầu
+        ======================================================= */}
         <View style={styles.profileSection}>
-          <Image
-            source={{
-              uri: displayProfile.photoUrl ?? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300",
-            }}
-            style={styles.avatar}
-          />
+          <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+            <Text style={styles.avatarText}>
+              {displayProfile.fullName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
 
           <Text style={styles.name}>{displayProfile.fullName}</Text>
-
           <Text style={styles.email}>{displayProfile.email}</Text>
         </View>
 
-        {/* Goal Card */}
+        {/* =======================================================
+            Goal Card
+            Hiển thị mục tiêu hiện tại của user
+        ======================================================= */}
         <View style={styles.goalCard}>
           <Text style={styles.goalLabel}>My Goals</Text>
 
@@ -89,57 +137,61 @@ export function Profile() {
                 <Target size={22} color="#10B981" />
               </View>
 
-              <Text style={styles.goalTitle}>Personal Goal</Text>
+              <View>
+                <Text style={styles.goalTitle}>{getGoalText()}</Text>
 
-              <Text style={styles.goalDesc}>
-                Target Weight: {displayProfile.goalWeight} kg
-              </Text>
+                <Text style={styles.goalDesc}>
+                  Current Weight: {displayProfile.weight} kg
+                </Text>
+              </View>
             </View>
 
             <ChevronRight size={18} color="#CBD5E1" />
           </View>
         </View>
 
-        {/* Menu */}
+        {/* =======================================================
+            Menu actions
+        ======================================================= */}
         <View style={styles.menuCard}>
+          {/* Chỉnh sửa thông tin cá nhân */}
           <MenuItem
             icon={UserRound}
             title="Personal Information"
             onPress={() => router.push("/personal-information")}
           />
 
-          <MenuItem
-            icon={Activity}
-            title="Health Profile"
-            onPress={() => router.push("/health-profile")}
-          />
-
-          {/* SỬA TẠI ĐÂY: Điều hướng chính xác tới trang tổng quan sức khỏe */}
+          {/* Xem tổng quan sức khỏe */}
           <MenuItem
             icon={Activity}
             title="Health Summary"
             onPress={() => router.push("/health-summary")}
           />
 
+          {/* Theo dõi cân nặng */}
           <MenuItem
             icon={Scale}
             title="Weight Tracking"
             onPress={() => router.push("/weight")}
           />
 
+          {/* Nhắc nhở thông minh */}
           <MenuItem icon={Bell} title="Smart Reminders" />
 
+          {/* Hỗ trợ */}
           <MenuItem icon={CircleHelp} title="Help & Support" />
 
+          {/* Giới thiệu app */}
           <MenuItem icon={Info} title="About NutriMind" isLast />
         </View>
 
-        {/* Logout */}
+        {/* Logout button */}
         <Pressable style={styles.logoutBtn} onPress={() => setShowLogout(true)}>
           <LogOut size={18} color="#EF4444" />
-
           <Text style={styles.logoutText}>Log Out</Text>
         </Pressable>
+
+        {/* Modal xác nhận logout */}
         <LogoutModal
           visible={showLogout}
           onClose={() => setShowLogout(false)}
@@ -198,7 +250,15 @@ const styles = StyleSheet.create({
   avatar: {
     width: 102,
     height: 102,
-    borderRadius: 51,
+    borderRadius: 999,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  avatarText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 38,
   },
 
   name: {

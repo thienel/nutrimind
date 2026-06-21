@@ -20,7 +20,7 @@ export interface CachedProfile {
   gender: string;
   height: string;
   weight: string;
-  goalWeight: string;
+  goal: string;
   photoUrl?: string;
   waterTargetMl?: number;
 }
@@ -40,7 +40,7 @@ const DEFAULT_PROFILE: CachedProfile = {
   gender: "",
   height: "",
   weight: "",
-  goalWeight: "",
+  goal: "",
 };
 
 async function loadFromCache(): Promise<{
@@ -107,7 +107,7 @@ export function useOfflineProfile(): UseOfflineProfileReturn {
         gender: serverProfile.gender ?? "",
         height: serverProfile.height_cm?.toString() ?? "",
         weight: serverProfile.weight_kg?.toString() ?? "",
-        goalWeight: serverProfile.goal ?? "",
+        goal: serverProfile.goal ?? "",
         photoUrl: serverProfile.avatar_url,
         waterTargetMl: serverProfile.water_target_ml,
       };
