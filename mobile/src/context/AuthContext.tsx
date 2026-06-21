@@ -63,11 +63,7 @@ interface AuthContextValue {
   /** Đăng nhập bằng email + password (spec §2.4) */
   emailLogin(email: string, password: string): Promise<void>;
   /** Đăng ký tài khoản mới (spec §2.3) */
-  register(
-    email: string,
-    password: string,
-    displayName: string
-  ): Promise<void>;
+  register(email: string, password: string, displayName: string): Promise<void>;
   /** Đăng nhập bằng Google (spec §2.5) */
   googleSignIn(): Promise<void>;
   /** Sign-out thủ công (spec §2.10) */
@@ -139,7 +135,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // 30 phút = 30 * 60 * 1000 = 1800000 ms
         if (timeInBackground >= 1800000 && !isPullingRef.current) {
           isPullingRef.current = true;
-          console.log("[AuthContext] App in background for >30m. Pulling data...");
+          console.log(
+            "[AuthContext] App in background for >30m. Pulling data...",
+          );
           pullInitialData(db, user.id).finally(() => {
             isPullingRef.current = false;
           });
@@ -163,43 +161,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Navigation sau auth ──────────────────────────────────────────────────
-  const navigateAfterAuth = useCallback(
-    async (isFirstLogin: boolean, userId?: number) => {
-      if (isFirstLogin) {
-        router.replace("/welcome-setup");
-        return;
-      }
+  const navigateAfterAuth = useCallback(async (isFirstLogin: boolean) => {
+    // Nếu là lần đầu login -> vào onboarding
+    if (isFirstLogin) {
+      router.replace("/welcome-setup");
+      return;
+    }
 
-      // Pull initial data từ server (spec §2.8) — nếu 403 ONBOARDING_REQUIRED → onboarding
-      try {
-        if (userId) {
-          await pullInitialData(db, userId);
-        } else {
-          await api.get("/profile");
-        }
-        router.replace("/(tabs)/home");
-      } catch (err: unknown) {
-        const e = err as { status?: number };
-        if (e?.status === 403) {
-          router.replace("/welcome-setup");
-        } else {
-          // Network error nhưng token ok → vào home với data local
-          router.replace("/(tabs)/home");
-        }
-      }
-    },
-    [db]
-  );
+    // Không check profile ở đây nữa
+    // để root layout xử lý tập trung
+    router.replace("/(tabs)/home");
+  }, []);
 
   // ── Force sign-out (spec §2.9) ────────────────────────────────────────────
   const forceSignOut = useCallback(async () => {
     // Xóa token và profile cache
     const currentUser = user;
     await clearTokens();
-    await clearProfileCache().catch(() => { });
+    await clearProfileCache().catch(() => {});
     // Xóa SQLite data nếu biết userId
     if (currentUser?.id) {
-      await clearUserData(currentUser.id).catch(() => { });
+      await clearUserData(currentUser.id).catch(() => {});
     }
     setUser(null);
     // Spec: hiển thị thông báo phiên hết hạn
@@ -208,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       Alert.alert(
         "Phiên đăng nhập hết hạn",
         "Vui lòng đăng nhập lại để tiếp tục.",
-        [{ text: "OK" }]
+        [{ text: "OK" }],
       );
     }, 500);
   }, [user]);
@@ -312,9 +294,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
       await persistAuth(resp);
-      await navigateAfterAuth(resp.is_first_login, resp.user.id);
+      await navigateAfterAuth(resp.is_first_login);
     },
-    [persistAuth, navigateAfterAuth]
+    [persistAuth, navigateAfterAuth],
   );
 
   // ── Register (spec §2.3) ──────────────────────────────────────────────────
@@ -329,22 +311,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // is_first_login luôn true khi register (spec §2.3)
       router.replace("/welcome-setup");
     },
-    [persistAuth]
+    [persistAuth],
   );
 
   // ── Google Sign-In (spec §2.5) ────────────────────────────────────────────
   const googleSignIn = useCallback(async () => {
     try {
       const idToken = await getGoogleIdToken();
-      if (!idToken) return; // User cancel → không làm gì
 
+      // user bấm cancel → không làm gì
+      if (!idToken) return;
+
+      // gửi Google id_token lên backend để login
       const resp = await api.post<AuthTokenResponse>("/auth/google", {
         id_token: idToken,
       });
+
+      // lưu token + user vào storage/context
       await persistAuth(resp);
-      await navigateAfterAuth(resp.is_first_login, resp.user.id);
+
+      // điều hướng sau login
+      // chỉ cần truyền is_first_login
+      await navigateAfterAuth(resp.is_first_login);
     } catch (error: any) {
+      // log lỗi để debug
       console.error("Google SignIn Error:", error);
+
+      // show lỗi cho user
       Alert.alert("Lỗi đăng nhập", error?.message || JSON.stringify(error));
     }
   }, [persistAuth, navigateAfterAuth]);
@@ -354,23 +347,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Kiểm tra sync_queue (spec §2.10)
     try {
       const result = await db.getFirstAsync<{ count: number }>(
-        "SELECT COUNT(*) as count FROM sync_queue WHERE status IN ('pending', 'failed')"
+        "SELECT COUNT(*) as count FROM sync_queue WHERE status IN ('pending', 'failed')",
       );
-      
+
       if (result && result.count > 0) {
         return new Promise<void>((resolve) => {
           Alert.alert(
             "Chưa đồng bộ",
             `Bạn còn ${result.count} mục chưa được đồng bộ.\nNếu đăng xuất ngay, dữ liệu này sẽ bị mất.`,
             [
-              { text: "Đồng bộ rồi đăng xuất", style: "default", onPress: () => {
-                // Sẽ kích hoạt sync (được quản lý bởi NetworkContext) rồi user bấm sign out lại
-                // Hoặc nếu muốn force sync ở đây thì cần inject SyncService
-                // Tạm thời chỉ dismiss dialog
-                resolve();
-              } },
-              { text: "Đăng xuất ngay", style: "destructive", onPress: () => performSignOut().then(resolve) }
-            ]
+              {
+                text: "Đồng bộ rồi đăng xuất",
+                style: "default",
+                onPress: () => {
+                  // Sẽ kích hoạt sync (được quản lý bởi NetworkContext) rồi user bấm sign out lại
+                  // Hoặc nếu muốn force sync ở đây thì cần inject SyncService
+                  // Tạm thời chỉ dismiss dialog
+                  resolve();
+                },
+              },
+              {
+                text: "Đăng xuất ngay",
+                style: "destructive",
+                onPress: () => performSignOut().then(resolve),
+              },
+            ],
           );
         });
       }
@@ -402,11 +403,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Xóa toàn bộ SQLite data của user
     if (currentUser?.id) {
-      await clearUserData(currentUser.id).catch(() => { });
+      await clearUserData(currentUser.id).catch(() => {});
     }
 
     // Xóa AsyncStorage profile cache
-    await clearProfileCache().catch(() => { });
+    await clearProfileCache().catch(() => {});
 
     // Sign out Google (cục bộ)
     await googleSignOutLocal();
