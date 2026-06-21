@@ -173,7 +173,7 @@ export class SyncService {
               await this.updateEntryAfterSuccess(item, duplicateServerId);
               await this.queueRepo.markDone(item.id);
               console.log(`[SyncService] Resolved 409: linked to server_id ${duplicateServerId}`);
-              return 'done';
+              return 'synced';
             }
           } catch (e) {
             console.warn('[SyncService] Failed to recover from 409', e);
@@ -225,12 +225,15 @@ export class SyncService {
           const p = payload as MealCreatePayload;
           const res = await MealApi.logMeal({
             food_name: p.food_name,
-            meal_type: p.meal_type as any,
+            // Backend yêu cầu enum CHỮ HOA (BREAKFAST/LUNCH/DINNER/SNACK).
+            // Local DB lưu chữ thường nên phải chuẩn hoá khi gửi.
+            meal_type: toBackendMealType(p.meal_type),
             calories: p.calories,
             protein_g: p.protein_g,
             carb_g: p.carb_g,
             fat_g: p.fat_g,
-            source: p.source as any,
+            // Backend yêu cầu MANUAL hoặc AI_PHOTO (chữ hoa).
+            source: toBackendSource(p.source),
             ai_confidence: p.ai_confidence ?? undefined,
             logged_date: p.logged_date,
             client_created_at: p.client_created_at,
@@ -352,4 +355,29 @@ export class SyncService {
     const counts = await this.queueRepo.countByStatus();
     return counts.pending + counts.processing;
   }
+}
+
+// ─────────────────────────────────────────────────────────
+// Mapping local (lowercase) → backend enum (UPPERCASE)
+// ─────────────────────────────────────────────────────────
+
+/** Chuẩn hoá meal_type sang enum backend. "other" map về SNACK. */
+function toBackendMealType(value: string): string {
+  switch ((value || "").toLowerCase()) {
+    case "breakfast":
+      return "BREAKFAST";
+    case "lunch":
+      return "LUNCH";
+    case "dinner":
+      return "DINNER";
+    case "snack":
+      return "SNACK";
+    default:
+      return "SNACK"; // "other" hoặc giá trị lạ
+  }
+}
+
+/** Chuẩn hoá source sang enum backend (MANUAL | AI_PHOTO). */
+function toBackendSource(value: string): string {
+  return (value || "").toLowerCase() === "ai_photo" ? "AI_PHOTO" : "MANUAL";
 }

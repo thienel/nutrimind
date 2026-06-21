@@ -13,7 +13,12 @@
     "ios": {
       "bundleIdentifier": "com.nutrimind.app",
       "icon": "./assets/images/icon.png",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
       "package": "com.nutrimind.app",
@@ -32,6 +37,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withModularHeaders",
       "expo-router",
       "expo-secure-store",
       [
@@ -53,7 +59,14 @@
       "expo-sqlite",
       "expo-font",
       "expo-image",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "NutriMind cần truy cập thư viện ảnh để bạn tải ảnh món ăn lên phân tích.",
+          "cameraPermission": "NutriMind cần truy cập camera để bạn chụp ảnh món ăn phân tích."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

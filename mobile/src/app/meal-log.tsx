@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Keyboard,
   Pressable,
   ScrollView,
@@ -10,133 +12,54 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import {
   ArrowLeft,
   Camera,
   Clock3,
+  Plus,
   Search,
   Sparkles,
 } from "lucide-react-native";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { useToast } from "@/components/ToastProvider";
+import { useNetwork } from "@/context/NetworkContext";
 import { useAuth } from "@/context/AuthContext";
 import {
   getMealHistory,
   MealEntry,
 } from "@/lib/repositories/mealRepository";
+import { analyzeMealPhoto } from "@/services/mealAiService";
 
-type MealEstimate = {
+/** Preset nhập nhanh (dữ liệu local, không phải AI) — user xác nhận trước khi lưu. */
+type MealPreset = {
   name: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
-  fiber: number;
-  sugar: number;
-  sodium: number;
-  potassium: number;
 };
 
-const SUGGESTIONS: MealEstimate[] = [
-  {
-    name: "1 bowl of pho",
-    calories: 520,
-    protein: 26,
-    carbs: 64,
-    fat: 16,
-    fiber: 3.2,
-    sugar: 6,
-    sodium: 890,
-    potassium: 540,
-  },
-  {
-    name: "Grilled chicken + rice",
-    calories: 610,
-    protein: 42,
-    carbs: 72,
-    fat: 14,
-    fiber: 4.1,
-    sugar: 5,
-    sodium: 720,
-    potassium: 690,
-  },
-  {
-    name: "2 eggs + bread",
-    calories: 380,
-    protein: 22,
-    carbs: 35,
-    fat: 16,
-    fiber: 2.4,
-    sugar: 4,
-    sodium: 610,
-    potassium: 330,
-  },
-  {
-    name: "Beef steak + salad",
-    calories: 670,
-    protein: 48,
-    carbs: 24,
-    fat: 34,
-    fiber: 5.6,
-    sugar: 7,
-    sodium: 760,
-    potassium: 780,
-  },
-  {
-    name: "Banana smoothie",
-    calories: 310,
-    protein: 9,
-    carbs: 58,
-    fat: 6,
-    fiber: 4.8,
-    sugar: 31,
-    sodium: 180,
-    potassium: 620,
-  },
-  {
-    name: "Chicken soup",
-    calories: 420,
-    protein: 31,
-    carbs: 38,
-    fat: 12,
-    fiber: 3.5,
-    sugar: 5,
-    sodium: 840,
-    potassium: 510,
-  },
+const SUGGESTIONS: MealPreset[] = [
+  { name: "1 bowl of pho", calories: 520, protein: 26, carbs: 64, fat: 16 },
+  { name: "Grilled chicken + rice", calories: 610, protein: 42, carbs: 72, fat: 14 },
+  { name: "2 eggs + bread", calories: 380, protein: 22, carbs: 35, fat: 16 },
+  { name: "Beef steak + salad", calories: 670, protein: 48, carbs: 24, fat: 34 },
+  { name: "Banana smoothie", calories: 310, protein: 9, carbs: 58, fat: 6 },
+  { name: "Chicken soup", calories: 420, protein: 31, carbs: 38, fat: 12 },
 ];
-
-function createEstimateFromText(text: string): MealEstimate {
-  const normalized = text.trim().toLowerCase();
-
-  const matched = SUGGESTIONS.find((item) =>
-    normalized.includes(item.name.toLowerCase())
-  );
-
-  if (matched) return matched;
-
-  return {
-    name: text.trim(),
-    calories: 520,
-    protein: 28,
-    carbs: 62,
-    fat: 16,
-    fiber: 3.2,
-    sugar: 12,
-    sodium: 760,
-    potassium: 480,
-  };
-}
 
 export default function MealLogScreen() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { isOnline } = useNetwork();
 
   const userId = user ? Number(user.id) : 1;
 
   const [mealText, setMealText] = useState("");
   const [recentMeals, setRecentMeals] = useState<MealEntry[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const trimmedMealText = mealText.trim();
 
@@ -154,67 +77,149 @@ export default function MealLogScreen() {
     async function loadRecentMeals() {
       try {
         const meals = await getMealHistory(userId, 3, 0);
-
-        if (mounted) {
-          setRecentMeals(meals);
-        }
+        if (mounted) setRecentMeals(meals);
       } catch (error) {
         console.error("[MealLogScreen] load recent meals failed:", error);
       }
     }
 
     loadRecentMeals();
-
     return () => {
       mounted = false;
     };
   }, [userId]);
 
-  function goToAiResult(estimate: MealEstimate) {
+  // ── Manual entry (Describe your meal) ──────────────────────────────────────
+  function goToManualEntry(preset?: MealPreset, name?: string) {
     router.push({
-      pathname: "/ai-result",
+      pathname: "/manual-meal",
       params: {
-        name: estimate.name,
-        calories: String(estimate.calories),
-        protein: String(estimate.protein),
-        carbs: String(estimate.carbs),
-        fat: String(estimate.fat),
-        fiber: String(estimate.fiber),
-        sugar: String(estimate.sugar),
-        sodium: String(estimate.sodium),
-        potassium: String(estimate.potassium),
+        name: name ?? preset?.name ?? "",
+        calories: preset ? String(preset.calories) : "",
+        protein: preset ? String(preset.protein) : "",
+        carbs: preset ? String(preset.carbs) : "",
+        fat: preset ? String(preset.fat) : "",
       },
     });
   }
 
-  function handleAnalyzeMeal() {
+  function handleManualAdd() {
     Keyboard.dismiss();
-
     if (!trimmedMealText) {
       showToast({
         type: "warning",
         title: "Missing meal",
-        message: "Please describe your meal before analyzing.",
+        message: "Please describe your meal first.",
       });
       return;
     }
+    goToManualEntry(selectedSuggestion, trimmedMealText);
+  }
 
-    const estimate = selectedSuggestion ?? createEstimateFromText(trimmedMealText);
-    goToAiResult(estimate);
+  // ── AI Scan (camera + gallery) ─────────────────────────────────────────────
+  async function runAnalysis(uri: string, fileSize?: number) {
+    setAnalyzing(true);
+    try {
+      const result = await analyzeMealPhoto(
+        uri,
+        trimmedMealText || undefined,
+        fileSize
+      );
+      router.push({
+        pathname: "/ai-result",
+        params: {
+          name: result.food_name,
+          calories: String(result.calories),
+          protein: String(result.protein_g),
+          carbs: String(result.carb_g),
+          fat: String(result.fat_g),
+          confidence: String(result.confidence),
+          lowConfidence: result.low_confidence ? "1" : "0",
+          disclaimer: result.disclaimer ?? "",
+          imageUri: uri,
+        },
+      });
+    } catch (error: any) {
+      console.error("[MealLogScreen] AI analyze failed:", error);
+      showToast({
+        type: "error",
+        title: "Analyze failed",
+        message: error?.message ?? "Could not analyze the photo. Please try again.",
+      });
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function pickFromCamera() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      showToast({
+        type: "warning",
+        title: "Camera permission",
+        message: "Please allow camera access to scan your meal.",
+      });
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.7,
+      allowsEditing: true,
+    });
+    if (!res.canceled && res.assets?.[0]) {
+      await runAnalysis(res.assets[0].uri, res.assets[0].fileSize);
+    }
+  }
+
+  async function pickFromLibrary() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      showToast({
+        type: "warning",
+        title: "Photo permission",
+        message: "Please allow photo library access to upload a meal photo.",
+      });
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.7,
+      allowsEditing: true,
+    });
+    if (!res.canceled && res.assets?.[0]) {
+      await runAnalysis(res.assets[0].uri, res.assets[0].fileSize);
+    }
+  }
+
+  function handleScanWithAI() {
+    Keyboard.dismiss();
+    if (!isOnline) {
+      showToast({
+        type: "warning",
+        title: "You're offline",
+        message: "AI scan needs an internet connection.",
+      });
+      return;
+    }
+    Alert.alert("Scan meal with AI", "Choose a photo source", [
+      { text: "Take Photo", onPress: pickFromCamera },
+      { text: "Choose from Library", onPress: pickFromLibrary },
+      { text: "Cancel", style: "cancel" },
+    ]);
   }
 
   function handleRecentMealPress(meal: MealEntry) {
-    goToAiResult({
-      name: meal.name,
-      calories: meal.calories,
-      protein: meal.protein_g,
-      carbs: meal.carbs_g,
-      fat: meal.fat_g,
-      fiber: 3.2,
-      sugar: 12,
-      sodium: 760,
-      potassium: 480,
-    });
+    // Re-log nhanh: mở form nhập tay với dữ liệu cũ điền sẵn.
+    goToManualEntry(
+      {
+        name: meal.name,
+        calories: meal.calories,
+        protein: meal.protein_g,
+        carbs: meal.carbs_g,
+        fat: meal.fat_g,
+      },
+      meal.name
+    );
   }
 
   return (
@@ -235,7 +240,11 @@ export default function MealLogScreen() {
           <Text style={styles.title}>Log Meal</Text>
         </View>
 
-        <View style={styles.aiCard}>
+        <Pressable
+          style={styles.aiCard}
+          onPress={handleScanWithAI}
+          disabled={analyzing}
+        >
           <View style={styles.aiTextWrap}>
             <View style={styles.aiLabelRow}>
               <Sparkles size={15} color="#FFFFFF" />
@@ -244,23 +253,25 @@ export default function MealLogScreen() {
 
             <Text style={styles.aiTitle}>Scan meal{"\n"}with AI</Text>
             <Text style={styles.aiSubtitle}>
-              Take a photo and instantly estimate calories & macros.
+              Take or upload a photo to estimate calories & macros.
             </Text>
           </View>
 
-          <Pressable
-            style={styles.cameraButton}
-            onPress={() =>
-              showToast({
-                type: "info",
-                title: "Coming soon",
-                message: "Camera scan will be connected later.",
-              })
-            }
-          >
-            <Camera size={28} color="#FFFFFF" />
-          </Pressable>
-        </View>
+          <View style={styles.cameraButton}>
+            {analyzing ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Camera size={28} color="#FFFFFF" />
+            )}
+          </View>
+        </Pressable>
+
+        {analyzing && (
+          <View style={styles.analyzingRow}>
+            <ActivityIndicator size="small" color="#10B981" />
+            <Text style={styles.analyzingText}>Analyzing your meal photo…</Text>
+          </View>
+        )}
 
         <Text style={styles.sectionLabel}>Describe your meal</Text>
 
@@ -270,15 +281,15 @@ export default function MealLogScreen() {
             style={styles.input}
             value={mealText}
             onChangeText={setMealText}
-            placeholder="E.g. 1 bowl of pho + peach tea"
+            placeholder="E.g. 1 bowl of pho"
             placeholderTextColor="#94A3B8"
             returnKeyType="done"
-            onSubmitEditing={handleAnalyzeMeal}
+            onSubmitEditing={handleManualAdd}
           />
         </View>
 
         <Text style={[styles.sectionLabel, styles.suggestionTitle]}>
-          Suggestions
+          Quick add
         </Text>
 
         <View style={styles.suggestions}>
@@ -305,11 +316,11 @@ export default function MealLogScreen() {
           })}
         </View>
 
-        <Pressable style={styles.analyzeButton} onPress={handleAnalyzeMeal}>
+        <Pressable style={styles.analyzeButton} onPress={handleManualAdd}>
           <View style={styles.analyzeIcon}>
-            <Sparkles size={17} color="#FFFFFF" />
+            <Plus size={17} color="#FFFFFF" />
           </View>
-          <Text style={styles.analyzeText}>Analyze Meal</Text>
+          <Text style={styles.analyzeText}>Add Manually</Text>
         </Pressable>
 
         <View style={styles.recentHeader}>
@@ -437,6 +448,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
+  },
+  analyzingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  analyzingText: {
+    color: "#10B981",
+    fontSize: 14,
+    fontWeight: "700",
   },
   sectionLabel: {
     fontSize: 14,
