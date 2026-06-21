@@ -173,7 +173,7 @@ export class SyncService {
               await this.updateEntryAfterSuccess(item, duplicateServerId);
               await this.queueRepo.markDone(item.id);
               console.log(`[SyncService] Resolved 409: linked to server_id ${duplicateServerId}`);
-              return 'done';
+              return 'synced';
             }
           } catch (e) {
             console.warn('[SyncService] Failed to recover from 409', e);

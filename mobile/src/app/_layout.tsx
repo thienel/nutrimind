@@ -27,6 +27,7 @@ function AppWithProviders() {
 
   // lấy route hiện tại (expo-router)
   const segments = useSegments();
+  const pathString = segments.join("/");
 
   useEffect(() => {
     // =======================================================
@@ -46,6 +47,9 @@ function AppWithProviders() {
       // - auth
       // - welcome setup
       // - personal info
+      // - health profile
+      // - profile
+      // - index
       // =======================================================
       const safeRoutes = [
         "personal-information",
@@ -57,11 +61,8 @@ function AppWithProviders() {
         "auth",
       ];
 
-      // route hiện tại
-      const currentRoute = segments[0];
-
-      // kiểm tra route hiện tại có nằm trong safeRoutes không
-      const isSafeRoute = safeRoutes.includes(currentRoute);
+      // kiểm tra route hiện tại hoặc bất kỳ segment nào (ví dụ trong tabs) có nằm trong safeRoutes không
+      const isSafeRoute = segments.some((segment) => safeRoutes.includes(segment));
 
       // nếu đang ở route an toàn -> bỏ qua check
       if (isSafeRoute) return;
@@ -124,7 +125,7 @@ function AppWithProviders() {
     // - user thay đổi
     // - route thay đổi
     checkProfile();
-  }, [user, segments]);
+  }, [user, pathString]);
 
   return (
     // =======================================================
