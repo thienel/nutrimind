@@ -43,11 +43,12 @@ func (r *challengeRepositoryImpl) Delete(ctx context.Context, id uint) error {
 func (r *challengeRepositoryImpl) List(ctx context.Context, offset, limit int, _ query.QueryOptions) ([]entity.Challenge, int64, error) {
 	var cs []entity.Challenge
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.Challenge{})
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.Challenge{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "challenge")
 	}
-	if err := q.Offset(offset).Limit(limit).Find(&cs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.Challenge{}).
+		Offset(offset).Limit(limit).Find(&cs).Error; err != nil {
 		return nil, 0, wrapListError(err, "challenge")
 	}
 	return cs, total, nil
@@ -113,11 +114,12 @@ func (r *challengeEnrollmentRepositoryImpl) Delete(ctx context.Context, id uint)
 func (r *challengeEnrollmentRepositoryImpl) List(ctx context.Context, offset, limit int, _ query.QueryOptions) ([]entity.ChallengeEnrollment, int64, error) {
 	var es []entity.ChallengeEnrollment
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.ChallengeEnrollment{})
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.ChallengeEnrollment{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "enrollment")
 	}
-	if err := q.Offset(offset).Limit(limit).Find(&es).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.ChallengeEnrollment{}).
+		Offset(offset).Limit(limit).Find(&es).Error; err != nil {
 		return nil, 0, wrapListError(err, "enrollment")
 	}
 	return es, total, nil
@@ -244,11 +246,12 @@ func (r *challengeDailyCompletionRepositoryImpl) Delete(ctx context.Context, id 
 func (r *challengeDailyCompletionRepositoryImpl) List(ctx context.Context, offset, limit int, _ query.QueryOptions) ([]entity.ChallengeDailyCompletion, int64, error) {
 	var cs []entity.ChallengeDailyCompletion
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.ChallengeDailyCompletion{})
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.ChallengeDailyCompletion{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "daily completion")
 	}
-	if err := q.Offset(offset).Limit(limit).Find(&cs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.ChallengeDailyCompletion{}).
+		Offset(offset).Limit(limit).Find(&cs).Error; err != nil {
 		return nil, 0, wrapListError(err, "daily completion")
 	}
 	return cs, total, nil

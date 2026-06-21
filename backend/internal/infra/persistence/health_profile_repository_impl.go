@@ -58,12 +58,11 @@ func (r *healthProfileRepositoryImpl) List(ctx context.Context, offset, limit in
 	var profiles []entity.HealthProfile
 	var total int64
 
-	q := r.db.WithContext(ctx).Model(&entity.HealthProfile{})
-
-	if err := q.Count(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.HealthProfile{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "health profile")
 	}
-	if err := q.Offset(offset).Limit(limit).Find(&profiles).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.HealthProfile{}).
+		Offset(offset).Limit(limit).Find(&profiles).Error; err != nil {
 		return nil, 0, wrapListError(err, "health profile")
 	}
 	return profiles, total, nil

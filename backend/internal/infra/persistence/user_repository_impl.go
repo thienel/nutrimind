@@ -110,20 +110,24 @@ func (r *userRepositoryImpl) ListWithQuery(ctx context.Context, offset, limit in
 	var users []*entity.User
 	var total int64
 
-	q := r.db.WithContext(ctx).Model(&entity.User{})
-
-	// Search filter
-	if searchFilter, ok := opts.Filters["search"]; ok {
-		if searchValue, ok := searchFilter.Value.(string); ok && searchValue != "" {
-			pattern := "%" + searchValue + "%"
-			q = q.Where("email ILIKE ? OR display_name ILIKE ?", pattern, pattern)
+	buildBaseQuery := func() *gorm.DB {
+		tx := r.db.WithContext(ctx).Model(&entity.User{})
+		if searchFilter, ok := opts.Filters["search"]; ok {
+			if searchValue, ok := searchFilter.Value.(string); ok && searchValue != "" {
+				pattern := "%" + searchValue + "%"
+				tx = tx.Where("email ILIKE ? OR display_name ILIKE ?", pattern, pattern)
+			}
 		}
+		return tx
 	}
 
 	// Count total
-	if err := q.Count(&total).Error; err != nil {
+	if err := buildBaseQuery().Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "người dùng")
 	}
+
+	// Fetch items
+	q := buildBaseQuery()
 
 	// Sorting
 	if len(opts.Sort) > 0 {

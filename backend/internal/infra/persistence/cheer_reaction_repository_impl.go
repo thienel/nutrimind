@@ -42,11 +42,12 @@ func (r *cheerReactionRepositoryImpl) Delete(ctx context.Context, id uint) error
 func (r *cheerReactionRepositoryImpl) List(ctx context.Context, offset, limit int, _ query.QueryOptions) ([]entity.CheerReaction, int64, error) {
 	var cs []entity.CheerReaction
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.CheerReaction{})
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.CheerReaction{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "cheer reaction")
 	}
-	if err := q.Offset(offset).Limit(limit).Find(&cs).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.CheerReaction{}).
+		Offset(offset).Limit(limit).Find(&cs).Error; err != nil {
 		return nil, 0, wrapListError(err, "cheer reaction")
 	}
 	return cs, total, nil

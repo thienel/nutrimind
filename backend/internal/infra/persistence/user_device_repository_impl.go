@@ -51,11 +51,12 @@ func (r *userDeviceRepositoryImpl) Delete(ctx context.Context, id uint) error {
 func (r *userDeviceRepositoryImpl) List(ctx context.Context, offset, limit int, _ query.QueryOptions) ([]entity.UserDevice, int64, error) {
 	var devices []entity.UserDevice
 	var total int64
-	q := r.db.WithContext(ctx).Model(&entity.UserDevice{})
-	if err := q.Count(&total).Error; err != nil {
+
+	if err := r.db.WithContext(ctx).Model(&entity.UserDevice{}).Count(&total).Error; err != nil {
 		return nil, 0, wrapListError(err, "user device")
 	}
-	if err := q.Offset(offset).Limit(limit).Find(&devices).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&entity.UserDevice{}).
+		Offset(offset).Limit(limit).Find(&devices).Error; err != nil {
 		return nil, 0, wrapListError(err, "user device")
 	}
 	return devices, total, nil
