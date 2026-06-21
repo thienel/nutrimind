@@ -49,8 +49,15 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
     Array.from({ length: 7 }).map(async (_, i) => {
       const dateStr = getDateStr(i);
       try {
-        const meals = await api.get<any[]>(`/meals?date=${dateStr}`);
-        if (Array.isArray(meals)) {
+        const res = await api.get<any>(`/meals?date=${dateStr}`);
+        const mealsByType = res?.meals ?? {};
+        const meals: any[] = [
+          ...(mealsByType.breakfast ?? []),
+          ...(mealsByType.lunch ?? []),
+          ...(mealsByType.dinner ?? []),
+          ...(mealsByType.snack ?? []),
+        ];
+        if (meals.length > 0) {
           for (const m of meals) {
             if (!m.id) continue;
             // Check trùng
@@ -87,8 +94,9 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
     Array.from({ length: 7 }).map(async (_, i) => {
       const dateStr = getDateStr(i);
       try {
-        const waters = await api.get<any[]>(`/water?date=${dateStr}`);
-        if (Array.isArray(waters)) {
+        const res = await api.get<any>(`/water?date=${dateStr}`);
+        const waters: any[] = res?.entries ?? [];
+        if (waters.length > 0) {
           for (const w of waters) {
             if (!w.id) continue;
             const existing = await db.getFirstAsync<{ local_id: string }>(
@@ -116,8 +124,9 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
   );
 
   // 4. Weight (90 ngày)
-  const pWeight = api.get<any[]>("/health/weight?limit=90&offset=0").then(async (weights) => {
-    if (Array.isArray(weights)) {
+  const pWeight = api.get<any>("/health/weight?limit=90&offset=0").then(async (res) => {
+    const weights: any[] = res?.items ?? [];
+    if (weights.length > 0) {
       for (const w of weights) {
         if (!w.id) continue;
         const existing = await db.getFirstAsync<{ local_id: string }>(
@@ -156,8 +165,15 @@ export async function fetchAndCacheDate(db: SQLiteDatabase, userId: number, date
 
   try {
     // 1. Fetch Meals
-    const meals = await api.get<any[]>(`/meals?date=${dateStr}`);
-    if (Array.isArray(meals)) {
+    const mealsRes = await api.get<any>(`/meals?date=${dateStr}`);
+    const mealsByType = mealsRes?.meals ?? {};
+    const meals: any[] = [
+      ...(mealsByType.breakfast ?? []),
+      ...(mealsByType.lunch ?? []),
+      ...(mealsByType.dinner ?? []),
+      ...(mealsByType.snack ?? []),
+    ];
+    if (meals.length > 0) {
       for (const m of meals) {
         if (!m.id) continue;
         const existing = await db.getFirstAsync<{ local_id: string }>(
@@ -184,8 +200,9 @@ export async function fetchAndCacheDate(db: SQLiteDatabase, userId: number, date
     }
 
     // 2. Fetch Water
-    const waters = await api.get<any[]>(`/water?date=${dateStr}`);
-    if (Array.isArray(waters)) {
+    const waterRes = await api.get<any>(`/water?date=${dateStr}`);
+    const waters: any[] = waterRes?.entries ?? [];
+    if (waters.length > 0) {
       for (const w of waters) {
         if (!w.id) continue;
         const existing = await db.getFirstAsync<{ local_id: string }>(

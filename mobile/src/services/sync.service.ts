@@ -147,16 +147,25 @@ export class SyncService {
             const p = JSON.parse(item.payload);
 
             if (item.entity_type === 'meal') {
-              const meals = await api.get<any[]>(`/meals?date=${p.logged_date}`);
-              const existing = meals?.find((m) => m.food_name === p.food_name && m.meal_type === p.meal_type);
+              const mealsRes = await api.get<any>(`/meals?date=${p.logged_date}`);
+              const mealsByType = mealsRes?.meals ?? {};
+              const allMeals: any[] = [
+                ...(mealsByType.breakfast ?? []),
+                ...(mealsByType.lunch ?? []),
+                ...(mealsByType.dinner ?? []),
+                ...(mealsByType.snack ?? []),
+              ];
+              const existing = allMeals.find((m) => m.food_name === p.food_name && m.meal_type === p.meal_type);
               if (existing?.id) duplicateServerId = existing.id;
             } else if (item.entity_type === 'water') {
-              const waters = await api.get<any[]>(`/water?date=${p.logged_date}`);
-              const existing = waters?.find((w) => w.volume_ml === p.volume_ml);
+              const waterRes = await api.get<any>(`/water?date=${p.logged_date}`);
+              const allWaters: any[] = waterRes?.entries ?? [];
+              const existing = allWaters.find((w) => w.volume_ml === p.volume_ml);
               if (existing?.id) duplicateServerId = existing.id;
             } else if (item.entity_type === 'weight') {
-              const weights = await api.get<any[]>('/health/weight?limit=7&offset=0');
-              const existing = weights?.find((w) => w.weight_kg === p.weight_kg);
+              const weightRes = await api.get<any>('/health/weight?limit=7&offset=0');
+              const allWeights: any[] = weightRes?.items ?? [];
+              const existing = allWeights.find((w) => w.weight_kg === p.weight_kg);
               if (existing?.id) duplicateServerId = existing.id;
             }
 
