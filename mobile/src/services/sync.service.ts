@@ -1,19 +1,13 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
-import { MealRepository } from '../db/repositories/meal.repo';
-import { WaterRepository } from '../db/repositories/water.repo';
-import { WeightRepository } from '../db/repositories/weight.repo';
-import { SyncQueueRepository } from '../db/repositories/sync-queue.repo';
-import { ProfileRepository } from '../db/repositories/profile.repo';
-import type { SyncQueueItem, EntityType } from '../db/schema';
-import { api } from '@/lib/apiClient';
-import { ApiClientError, ApiAuthError } from './errors';
-import {
-  WeightApi,
-  MealApi,
-  WaterApi,
-} from './api.client';
-
-
+import type { SQLiteDatabase } from "expo-sqlite";
+import { MealRepository } from "../db/repositories/meal.repo";
+import { WaterRepository } from "../db/repositories/water.repo";
+import { WeightRepository } from "../db/repositories/weight.repo";
+import { SyncQueueRepository } from "../db/repositories/sync-queue.repo";
+import { ProfileRepository } from "../db/repositories/profile.repo";
+import type { SyncQueueItem, EntityType } from "../db/schema";
+import { api } from "@/lib/apiClient";
+import { ApiClientError, ApiAuthError } from "./errors";
+import { WeightApi, MealApi, WaterApi } from "./api.client";
 
 interface WeightCreatePayload {
   weight_kg: number;
@@ -77,7 +71,17 @@ export class SyncService {
    *
    * Returns { synced, failed, skipped }
    */
-  async runSync(): Promise<{ synced: number; failed: number; skipped: number }> {
+  async runSync(): Promise<{
+    synced: number;
+    failed: number;
+    skipped: number;
+  }> {
+    // Guard: db có thể null nếu SyncService được gọi trước khi SQLite init xong
+    if (!this.db) {
+      console.warn("[SyncService] runSync skipped — db not ready");
+      return { synced: 0, failed: 0, skipped: 0 };
+    }
+
     const pending = await this.queueRepo.getPendingItems(50);
     const retryable = await this.queueRepo.getRetryableItems();
     const items = [...pending, ...retryable];
@@ -85,7 +89,7 @@ export class SyncService {
     const result = { synced: 0, failed: 0, skipped: 0 };
 
     if (items.length === 0) {
-      console.log('[SyncService] Nothing to sync');
+      console.log("[SyncService] Nothing to sync");
       return result;
     }
 
@@ -93,13 +97,14 @@ export class SyncService {
 
     for (const item of items) {
       const outcome = await this.processItem(item);
-      if (outcome === 'synced') result.synced++;
-      else if (outcome === 'failed') result.failed++;
-      else if (outcome === 'skipped') result.skipped++;
-      else if (outcome === 'auth_error') {
+      if (outcome === "synced") result.synced++;
+      else if (outcome === "failed") result.failed++;
+      else if (outcome === "skipped") result.skipped++;
+      else if (outcome === "auth_error") {
         // Stop the whole cycle — no point calling API without valid token
-        console.warn('[SyncService] Auth error — stopping sync cycle');
-        result.skipped += items.length - result.synced - result.failed - result.skipped - 1;
+        console.warn("[SyncService] Auth error — stopping sync cycle");
+        result.skipped +=
+          items.length - result.synced - result.failed - result.skipped - 1;
         break;
       }
     }
@@ -108,46 +113,54 @@ export class SyncService {
     await this.queueRepo.pruneCompleted(7);
 
     console.log(
-      `[SyncService] Done — synced: ${result.synced}, failed: ${result.failed}, skipped: ${result.skipped}`
+      `[SyncService] Done — synced: ${result.synced}, failed: ${result.failed}, skipped: ${result.skipped}`,
     );
     return result;
   }
 
   private async processItem(
-    item: SyncQueueItem
-  ): Promise<'synced' | 'failed' | 'skipped' | 'auth_error'> {
+    item: SyncQueueItem,
+  ): Promise<"synced" | "failed" | "skipped" | "auth_error"> {
     let payload: unknown;
     try {
       payload = JSON.parse(item.payload);
     } catch {
       await this.queueRepo.dismiss(item.id);
       console.warn(`[SyncService] Invalid JSON for queue item ${item.id}`);
-      return 'failed';
+      return "failed";
     }
 
     await this.queueRepo.markProcessing(item.id);
 
     try {
-      const serverId = await this.callApi(item.entity_type, item.operation, payload);
+      const serverId = await this.callApi(
+        item.entity_type,
+        item.operation,
+        payload,
+      );
       await this.queueRepo.markDone(item.id);
       await this.updateEntryAfterSuccess(item, serverId);
-      return 'synced';
+      return "synced";
     } catch (err) {
       if (err instanceof ApiAuthError) {
         // Restore to pending so it retries after re-login
         await this.queueRepo.markFailed(item.id, err.message);
-        return 'auth_error';
+        return "auth_error";
       }
 
       if (err instanceof ApiClientError) {
-        if (err.status === 409 && item.operation === 'CREATE') {
-          console.log(`[SyncService] 409 Conflict for ${item.entity_type} — resolving duplicate...`);
+        if (err.status === 409 && item.operation === "CREATE") {
+          console.log(
+            `[SyncService] 409 Conflict for ${item.entity_type} — resolving duplicate...`,
+          );
           try {
             let duplicateServerId: number | undefined;
             const p = JSON.parse(item.payload);
 
-            if (item.entity_type === 'meal') {
-              const mealsRes = await api.get<any>(`/meals?date=${p.logged_date}`);
+            if (item.entity_type === "meal") {
+              const mealsRes = await api.get<any>(
+                `/meals?date=${p.logged_date}`,
+              );
               const mealsByType = mealsRes?.meals ?? {};
               const allMeals: any[] = [
                 ...(mealsByType.breakfast ?? []),
@@ -155,28 +168,41 @@ export class SyncService {
                 ...(mealsByType.dinner ?? []),
                 ...(mealsByType.snack ?? []),
               ];
-              const existing = allMeals.find((m) => m.food_name === p.food_name && m.meal_type === p.meal_type);
+              const existing = allMeals.find(
+                (m) =>
+                  m.food_name === p.food_name && m.meal_type === p.meal_type,
+              );
               if (existing?.id) duplicateServerId = existing.id;
-            } else if (item.entity_type === 'water') {
-              const waterRes = await api.get<any>(`/water?date=${p.logged_date}`);
+            } else if (item.entity_type === "water") {
+              const waterRes = await api.get<any>(
+                `/water?date=${p.logged_date}`,
+              );
               const allWaters: any[] = waterRes?.entries ?? [];
-              const existing = allWaters.find((w) => w.volume_ml === p.volume_ml);
+              const existing = allWaters.find(
+                (w) => w.volume_ml === p.volume_ml,
+              );
               if (existing?.id) duplicateServerId = existing.id;
-            } else if (item.entity_type === 'weight') {
-              const weightRes = await api.get<any>('/health/weight?limit=7&offset=0');
+            } else if (item.entity_type === "weight") {
+              const weightRes = await api.get<any>(
+                "/health/weight?limit=7&offset=0",
+              );
               const allWeights: any[] = weightRes?.items ?? [];
-              const existing = allWeights.find((w) => w.weight_kg === p.weight_kg);
+              const existing = allWeights.find(
+                (w) => w.weight_kg === p.weight_kg,
+              );
               if (existing?.id) duplicateServerId = existing.id;
             }
 
             if (duplicateServerId) {
               await this.updateEntryAfterSuccess(item, duplicateServerId);
               await this.queueRepo.markDone(item.id);
-              console.log(`[SyncService] Resolved 409: linked to server_id ${duplicateServerId}`);
-              return 'synced';
+              console.log(
+                `[SyncService] Resolved 409: linked to server_id ${duplicateServerId}`,
+              );
+              return "synced";
             }
           } catch (e) {
-            console.warn('[SyncService] Failed to recover from 409', e);
+            console.warn("[SyncService] Failed to recover from 409", e);
           }
         }
 
@@ -185,7 +211,7 @@ export class SyncService {
         await this.queueRepo.dismiss(item.id);
         await this.markEntryFailed(item.entity_type, item.local_id, msg);
         console.warn(`[SyncService] 4xx for ${item.id}: ${msg}`);
-        return 'failed';
+        return "failed";
       }
 
       // Network / 5xx — retryable with exponential backoff
@@ -193,19 +219,18 @@ export class SyncService {
       await this.queueRepo.markFailed(item.id, msg);
       await this.markEntryFailed(item.entity_type, item.local_id, msg);
       console.warn(`[SyncService] Retryable error for ${item.id}: ${msg}`);
-      return 'failed';
+      return "failed";
     }
   }
 
-
   private async callApi(
     entityType: EntityType,
-    operation: 'CREATE' | 'DELETE',
-    payload: unknown
+    operation: "CREATE" | "DELETE",
+    payload: unknown,
   ): Promise<number | undefined> {
     switch (entityType) {
-      case 'weight': {
-        if (operation === 'CREATE') {
+      case "weight": {
+        if (operation === "CREATE") {
           const p = payload as WeightCreatePayload;
           const res = await WeightApi.logWeight({
             date: p.logged_date,
@@ -220,8 +245,8 @@ export class SyncService {
         }
       }
 
-      case 'meal': {
-        if (operation === 'CREATE') {
+      case "meal": {
+        if (operation === "CREATE") {
           const p = payload as MealCreatePayload;
           const res = await MealApi.logMeal({
             food_name: p.food_name,
@@ -247,8 +272,8 @@ export class SyncService {
       }
 
       // ── Water (stub — backend endpoint not yet available) ─
-      case 'water': {
-        if (operation === 'CREATE') {
+      case "water": {
+        if (operation === "CREATE") {
           const p = payload as WaterCreatePayload;
           const res = await WaterApi.logWater({
             volume_ml: p.volume_ml,
@@ -274,27 +299,45 @@ export class SyncService {
 
   private async updateEntryAfterSuccess(
     item: SyncQueueItem,
-    serverId?: number
+    serverId?: number,
   ): Promise<void> {
-    if (item.operation === 'DELETE') {
+    if (item.operation === "DELETE") {
       // Server confirmed delete → hard delete locally
       switch (item.entity_type) {
-        case 'meal': await this.mealRepo.hardDeleteMealEntry(item.local_id); break;
-        case 'water': await this.waterRepo.hardDeleteWaterEntry(item.local_id); break;
-        case 'weight': await this.weightRepo.hardDeleteWeightEntry(item.local_id); break;
+        case "meal":
+          await this.mealRepo.hardDeleteMealEntry(item.local_id);
+          break;
+        case "water":
+          await this.waterRepo.hardDeleteWaterEntry(item.local_id);
+          break;
+        case "weight":
+          await this.weightRepo.hardDeleteWeightEntry(item.local_id);
+          break;
       }
     } else {
       // CREATE synced → mark synced + store server_id
       switch (item.entity_type) {
-        case 'meal':
-          await this.mealRepo.updateMealSyncStatus(item.local_id, 'synced', serverId);
+        case "meal":
+          await this.mealRepo.updateMealSyncStatus(
+            item.local_id,
+            "synced",
+            serverId,
+          );
           break;
-        case 'water':
-          await this.waterRepo.updateWaterSyncStatus(item.local_id, 'synced', serverId);
+        case "water":
+          await this.waterRepo.updateWaterSyncStatus(
+            item.local_id,
+            "synced",
+            serverId,
+          );
           break;
-        case 'weight':
-          await this.weightRepo.updateWeightSyncStatus(item.local_id, 'synced', serverId);
-          if (item.operation === 'CREATE') {
+        case "weight":
+          await this.weightRepo.updateWeightSyncStatus(
+            item.local_id,
+            "synced",
+            serverId,
+          );
+          if (item.operation === "CREATE") {
             try {
               const profileRepo = new ProfileRepository(this.db);
               const serverProfile = await api.get<any>("/profile");
@@ -324,9 +367,14 @@ export class SyncService {
                 server_updated_at: new Date().toISOString(),
                 cached_at: new Date().toISOString(),
               });
-              console.log('[SyncService] Refreshed profile after weight update');
+              console.log(
+                "[SyncService] Refreshed profile after weight update",
+              );
             } catch (e) {
-              console.warn('[SyncService] Failed to refresh profile after weight sync', e);
+              console.warn(
+                "[SyncService] Failed to refresh profile after weight sync",
+                e,
+              );
             }
           }
           break;
@@ -337,12 +385,33 @@ export class SyncService {
   private async markEntryFailed(
     entityType: EntityType,
     localId: string,
-    error: string
+    error: string,
   ): Promise<void> {
     switch (entityType) {
-      case 'meal': await this.mealRepo.updateMealSyncStatus(localId, 'failed', undefined, error); break;
-      case 'water': await this.waterRepo.updateWaterSyncStatus(localId, 'failed', undefined, error); break;
-      case 'weight': await this.weightRepo.updateWeightSyncStatus(localId, 'failed', undefined, error); break;
+      case "meal":
+        await this.mealRepo.updateMealSyncStatus(
+          localId,
+          "failed",
+          undefined,
+          error,
+        );
+        break;
+      case "water":
+        await this.waterRepo.updateWaterSyncStatus(
+          localId,
+          "failed",
+          undefined,
+          error,
+        );
+        break;
+      case "weight":
+        await this.weightRepo.updateWeightSyncStatus(
+          localId,
+          "failed",
+          undefined,
+          error,
+        );
+        break;
     }
   }
 
@@ -352,6 +421,11 @@ export class SyncService {
 
   /** Returns pending item count — useful for UI sync badge */
   async getPendingCount(): Promise<number> {
+    // Guard: db có thể null
+    if (!this.db) {
+      console.warn("[SyncService] getPendingCount skipped — db not ready");
+      return 0;
+    }
     const counts = await this.queueRepo.countByStatus();
     return counts.pending + counts.processing;
   }

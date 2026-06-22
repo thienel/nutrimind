@@ -23,23 +23,38 @@ export function FirstWeekPlan() {
 
   // fetch profile khi mở màn
   useEffect(() => {
-    fetchProfile();
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await getMyProfile({
+          file: "FirstWeekPlan.tsx",
+          route: "loadPlan",
+        });
+
+        if (!cancelled) {
+          setPlan({
+            calorie_target: res.calorie_target,
+            water_target_ml: res.water_target_ml,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.log("Lỗi fetch profile:", error);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  const fetchProfile = async () => {
-    try {
-      const res = await getMyProfile();
-
-      setPlan({
-        calorie_target: res.calorie_target,
-        water_target_ml: res.water_target_ml,
-      });
-    } catch (error) {
-      console.log("Lỗi fetch profile:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // loading
   if (loading) {

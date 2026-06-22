@@ -6,7 +6,7 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 
 import { router, useFocusEffect } from "expo-router";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -25,6 +25,7 @@ import {
 
 import { useOfflineProfile } from "@/hooks/useOfflineProfile";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/apiClient";
 
 // =======================================================
 // Danh sách màu avatar random
@@ -34,13 +35,14 @@ const avatarColors = ["#06B6D4", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
 
 export function Profile() {
   // lấy thông tin auth và hàm logout
-  const { signOut, user } = useAuth();
+  const { signOut, user, isHydrated } = useAuth();
 
   // hook lấy profile từ cache hoặc server
   const { profile, isStale, lastUpdated, refresh } = useOfflineProfile();
 
   // state bật/tắt modal logout
   const [showLogout, setShowLogout] = useState(false);
+  const mountedRef = useRef(true);
 
   // =======================================================
   // Mỗi lần focus lại màn Profile
@@ -53,8 +55,23 @@ export function Profile() {
   // =======================================================
   useFocusEffect(
     useCallback(() => {
+      mountedRef.current = true;
+
+      // Auth readiness gate — block fetches until auth is fully hydrated
+      if (!isHydrated || !user?.id) {
+        console.warn("[Profile] refresh skipped — auth not ready");
+        return;
+      }
+
+      // Mounted guard
+      if (!mountedRef.current) return;
+
       refresh();
-    }, [refresh]),
+
+      return () => {
+        mountedRef.current = false;
+      };
+    }, [refresh, isHydrated, user?.id]),
   );
 
   // =======================================================

@@ -105,7 +105,7 @@ interface RequestOptions extends Omit<RequestInit, "body"> {
  */
 export async function request<T = unknown>(
   path: string,
-  options: RequestOptions = {}
+  options: RequestOptions = {},
 ): Promise<T> {
   const { body, _retry = false, ...rest } = options;
 
@@ -116,6 +116,13 @@ export async function request<T = unknown>(
     ...(appToken ? { Authorization: `Bearer ${appToken}` } : {}),
     ...(rest.headers as Record<string, string>),
   };
+
+  // [API] Request tracing for profile endpoints
+  if (path.includes("/profile")) {
+    console.log(
+      `[API] ${options.method || "GET"} ${path} tokenExists=${!!appToken}`,
+    );
+  }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...rest,
@@ -153,7 +160,9 @@ export async function request<T = unknown>(
   }
 
   if (!res.ok) {
-    const errObj = json.error as { code?: string; message?: string } | undefined;
+    const errObj = json.error as
+      | { code?: string; message?: string }
+      | undefined;
     throw {
       status: res.status,
       code: errObj?.code ?? (json.code as string),

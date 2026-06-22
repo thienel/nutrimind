@@ -11,7 +11,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { completeOnboarding } from "@/services/profileService";
+import { completeOnboarding, getMyProfile } from "@/services/profileService";
 
 export function HealthSetup() {
   // goal chuẩn backend
@@ -47,11 +47,58 @@ export function HealthSetup() {
         activity_level: activity,
       });
 
+      // Rule A: Retry getMyProfile up to 3 times to confirm onboarding_done = true
+      let freshProfile: Awaited<ReturnType<typeof getMyProfile>> | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          freshProfile = await getMyProfile({
+            file: "HealthSetup.tsx",
+            route: "handleFinish",
+          });
+          if (freshProfile.onboarding_done === true) {
+            break;
+          }
+        } catch (err) {
+          console.warn(
+            `[HealthSetup] Profile fetch attempt ${attempt + 1} failed:`,
+            err,
+          );
+        }
+
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+
+      if (!freshProfile || freshProfile.onboarding_done !== true) {
+        Alert.alert(
+          "Error",
+          "Could not confirm onboarding completion. Please try again.",
+        );
+        return;
+      }
+
       // clear local step data
       await AsyncStorage.removeItem("onboarding_step_1");
 
-      // qua màn plan tuần đầu
-      router.replace("/first-week-plan");
+      // Lưu profile mới vào cache để các màn khác dùng ngay
+      await AsyncStorage.setItem(
+        "nutrimind_profile_cache",
+        JSON.stringify({
+          fullName: freshProfile.display_name,
+          email: freshProfile.email,
+          age: freshProfile.age.toString(),
+          gender: freshProfile.gender,
+          height: freshProfile.height_cm.toString(),
+          weight: freshProfile.weight_kg.toString(),
+          goal: freshProfile.goal,
+          photoUrl: freshProfile.avatar_url,
+          waterTargetMl: freshProfile.water_target_ml,
+        }),
+      );
+
+      // Navigate to Home only after backend confirms onboarding is fully committed
+      router.replace("/(tabs)/home");
     } catch (error) {
       console.log(error);
       Alert.alert("Error", "Cannot complete onboarding");

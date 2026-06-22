@@ -4,36 +4,45 @@ import { ProfileRepository } from "../db/repositories/profile.repo";
 import { generateUUID } from "@/lib/db";
 
 export async function pullInitialData(db: SQLiteDatabase, userId: number) {
+  // Guard: SQLite db có thể chưa sẵn sàng
+  if (!db) {
+    console.warn("[InitialData] pullInitialData skipped — db not ready");
+    return;
+  }
+
   const profileRepo = new ProfileRepository(db);
 
   console.log("[InitialData] Pulling initial data from server...");
 
   // 1. Profile
-  const pProfile = api.get<any>("/profile").then(async (serverProfile) => {
-    await profileRepo.upsertProfile({
-      user_id: userId,
-      display_name: serverProfile.display_name ?? "",
-      avatar_url: serverProfile.avatar_url ?? null,
-      age: serverProfile.age ?? null,
-      gender: serverProfile.gender ?? null,
-      height_cm: serverProfile.height_cm ?? null,
-      weight_kg: serverProfile.weight_kg ?? null,
-      goal: serverProfile.goal ?? null,
-      activity_level: serverProfile.activity_level ?? null,
-      bmi: serverProfile.bmi ?? null,
-      bmr: serverProfile.bmr ?? null,
-      tdee: serverProfile.tdee ?? null,
-      calorie_target: serverProfile.calorie_target ?? null,
-      protein_target_g: serverProfile.protein_target_g ?? null,
-      carb_target_g: serverProfile.carb_target_g ?? null,
-      fat_target_g: serverProfile.fat_target_g ?? null,
-      water_target_ml: serverProfile.water_target_ml ?? null,
-      social_enabled: serverProfile.social_enabled ? 1 : 0,
-      onboarding_done: serverProfile.onboarding_done ? 1 : 0,
-      server_updated_at: new Date().toISOString(),
-      cached_at: new Date().toISOString(),
-    });
-  }).catch((err) => console.warn("[InitialData] Failed to pull profile", err));
+  const pProfile = api
+    .get<any>("/profile")
+    .then(async (serverProfile) => {
+      await profileRepo.upsertProfile({
+        user_id: userId,
+        display_name: serverProfile.display_name ?? "",
+        avatar_url: serverProfile.avatar_url ?? null,
+        age: serverProfile.age ?? null,
+        gender: serverProfile.gender ?? null,
+        height_cm: serverProfile.height_cm ?? null,
+        weight_kg: serverProfile.weight_kg ?? null,
+        goal: serverProfile.goal ?? null,
+        activity_level: serverProfile.activity_level ?? null,
+        bmi: serverProfile.bmi ?? null,
+        bmr: serverProfile.bmr ?? null,
+        tdee: serverProfile.tdee ?? null,
+        calorie_target: serverProfile.calorie_target ?? null,
+        protein_target_g: serverProfile.protein_target_g ?? null,
+        carb_target_g: serverProfile.carb_target_g ?? null,
+        fat_target_g: serverProfile.fat_target_g ?? null,
+        water_target_ml: serverProfile.water_target_ml ?? null,
+        social_enabled: serverProfile.social_enabled ? 1 : 0,
+        onboarding_done: serverProfile.onboarding_done ? 1 : 0,
+        server_updated_at: new Date().toISOString(),
+        cached_at: new Date().toISOString(),
+      });
+    })
+    .catch((err) => console.warn("[InitialData] Failed to pull profile", err));
 
   // Helper cho date
   const getDateStr = (daysAgo: number) => {
@@ -63,7 +72,7 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
             // Check trùng
             const existing = await db.getFirstAsync<{ local_id: string }>(
               "SELECT local_id FROM local_meal_entries WHERE server_id = ?",
-              [m.id]
+              [m.id],
             );
             if (!existing) {
               await db.runAsync(
@@ -73,12 +82,21 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
                   logged_date, client_created_at, sync_status, sync_attempts, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', 0, ?)`,
                 [
-                  generateUUID(), m.id, userId, m.food_name || "Unknown",
-                  m.meal_type || "OTHER", m.calories || 0, m.protein_g || 0,
-                  m.carb_g || 0, m.fat_g || 0, m.source || "MANUAL",
-                  m.ai_confidence ?? null, m.logged_date || dateStr,
-                  m.client_created_at || today, today,
-                ]
+                  generateUUID(),
+                  m.id,
+                  userId,
+                  m.food_name || "Unknown",
+                  m.meal_type || "OTHER",
+                  m.calories || 0,
+                  m.protein_g || 0,
+                  m.carb_g || 0,
+                  m.fat_g || 0,
+                  m.source || "MANUAL",
+                  m.ai_confidence ?? null,
+                  m.logged_date || dateStr,
+                  m.client_created_at || today,
+                  today,
+                ],
               );
             }
           }
@@ -86,7 +104,7 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
       } catch (err) {
         console.warn(`[InitialData] Failed to pull meals for ${dateStr}`, err);
       }
-    })
+    }),
   );
 
   // 3. Water (7 ngày gần nhất)
@@ -101,7 +119,7 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
             if (!w.id) continue;
             const existing = await db.getFirstAsync<{ local_id: string }>(
               "SELECT local_id FROM local_water_entries WHERE server_id = ?",
-              [w.id]
+              [w.id],
             );
             if (!existing) {
               await db.runAsync(
@@ -110,9 +128,14 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
                   client_created_at, sync_status, sync_attempts, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, 'synced', 0, ?)`,
                 [
-                  generateUUID(), w.id, userId, w.volume_ml || 0,
-                  w.logged_date || dateStr, w.client_created_at || today, today,
-                ]
+                  generateUUID(),
+                  w.id,
+                  userId,
+                  w.volume_ml || 0,
+                  w.logged_date || dateStr,
+                  w.client_created_at || today,
+                  today,
+                ],
               );
             }
           }
@@ -120,35 +143,43 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
       } catch (err) {
         console.warn(`[InitialData] Failed to pull water for ${dateStr}`, err);
       }
-    })
+    }),
   );
 
   // 4. Weight (90 ngày)
-  const pWeight = api.get<any>("/health/weight?limit=90&offset=0").then(async (res) => {
-    const weights: any[] = res?.items ?? [];
-    if (weights.length > 0) {
-      for (const w of weights) {
-        if (!w.id) continue;
-        const existing = await db.getFirstAsync<{ local_id: string }>(
-          "SELECT local_id FROM local_weight_entries WHERE server_id = ?",
-          [w.id]
-        );
-        if (!existing) {
-          await db.runAsync(
-            `INSERT INTO local_weight_entries (
+  const pWeight = api
+    .get<any>("/health/weight?limit=90&offset=0")
+    .then(async (res) => {
+      const weights: any[] = res?.items ?? [];
+      if (weights.length > 0) {
+        for (const w of weights) {
+          if (!w.id) continue;
+          const existing = await db.getFirstAsync<{ local_id: string }>(
+            "SELECT local_id FROM local_weight_entries WHERE server_id = ?",
+            [w.id],
+          );
+          if (!existing) {
+            await db.runAsync(
+              `INSERT INTO local_weight_entries (
               local_id, server_id, user_id, weight_kg, logged_date, note,
               client_created_at, sync_status, sync_attempts, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, 'synced', 0, ?)`,
-            [
-              generateUUID(), w.id, userId, w.weight_kg || 0,
-              w.logged_at || today.slice(0, 10), w.note || null,
-              w.client_created_at || today, today,
-            ]
-          );
+              [
+                generateUUID(),
+                w.id,
+                userId,
+                w.weight_kg || 0,
+                w.logged_at || today.slice(0, 10),
+                w.note || null,
+                w.client_created_at || today,
+                today,
+              ],
+            );
+          }
         }
       }
-    }
-  }).catch((err) => console.warn("[InitialData] Failed to pull weights", err));
+    })
+    .catch((err) => console.warn("[InitialData] Failed to pull weights", err));
 
   await Promise.all([pProfile, pMeals, pWater, pWeight]);
   console.log("[InitialData] Pull completed.");
@@ -159,7 +190,11 @@ export async function pullInitialData(db: SQLiteDatabase, userId: number) {
  * Kéo dữ liệu của một ngày cụ thể từ server về cache vào SQLite.
  * @param dateStr dạng "YYYY-MM-DD"
  */
-export async function fetchAndCacheDate(db: SQLiteDatabase, userId: number, dateStr: string) {
+export async function fetchAndCacheDate(
+  db: SQLiteDatabase,
+  userId: number,
+  dateStr: string,
+) {
   console.log(`[InitialData] On-demand fetching for ${dateStr}...`);
   const today = new Date().toISOString();
 
@@ -178,7 +213,7 @@ export async function fetchAndCacheDate(db: SQLiteDatabase, userId: number, date
         if (!m.id) continue;
         const existing = await db.getFirstAsync<{ local_id: string }>(
           "SELECT local_id FROM local_meal_entries WHERE server_id = ?",
-          [m.id]
+          [m.id],
         );
         if (!existing) {
           await db.runAsync(
@@ -188,12 +223,21 @@ export async function fetchAndCacheDate(db: SQLiteDatabase, userId: number, date
               logged_date, client_created_at, sync_status, sync_attempts, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', 0, ?)`,
             [
-              generateUUID(), m.id, userId, m.food_name || "Unknown",
-              m.meal_type || "OTHER", m.calories || 0, m.protein_g || 0,
-              m.carb_g || 0, m.fat_g || 0, m.source || "MANUAL",
-              m.ai_confidence ?? null, m.logged_date || dateStr,
-              m.client_created_at || today, today,
-            ]
+              generateUUID(),
+              m.id,
+              userId,
+              m.food_name || "Unknown",
+              m.meal_type || "OTHER",
+              m.calories || 0,
+              m.protein_g || 0,
+              m.carb_g || 0,
+              m.fat_g || 0,
+              m.source || "MANUAL",
+              m.ai_confidence ?? null,
+              m.logged_date || dateStr,
+              m.client_created_at || today,
+              today,
+            ],
           );
         }
       }
@@ -207,7 +251,7 @@ export async function fetchAndCacheDate(db: SQLiteDatabase, userId: number, date
         if (!w.id) continue;
         const existing = await db.getFirstAsync<{ local_id: string }>(
           "SELECT local_id FROM local_water_entries WHERE server_id = ?",
-          [w.id]
+          [w.id],
         );
         if (!existing) {
           await db.runAsync(
@@ -216,9 +260,14 @@ export async function fetchAndCacheDate(db: SQLiteDatabase, userId: number, date
               client_created_at, sync_status, sync_attempts, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, 'synced', 0, ?)`,
             [
-              generateUUID(), w.id, userId, w.volume_ml || 0,
-              w.logged_date || dateStr, w.client_created_at || today, today,
-            ]
+              generateUUID(),
+              w.id,
+              userId,
+              w.volume_ml || 0,
+              w.logged_date || dateStr,
+              w.client_created_at || today,
+              today,
+            ],
           );
         }
       }

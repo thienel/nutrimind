@@ -23,8 +23,20 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import { useAuth } from "@/context/AuthContext";
-import { api } from "@/lib/apiClient";
+import { getMyProfile } from "@/services/profileService";
 import { getLocalDateKey } from "@/lib/dateUtils";
+import {
+  getHealthSummary,
+  getDailyMeals,
+  getDailyWater,
+  getAiAdvice,
+  getChallenges,
+  mapChallenges,
+} from "@/services/home.service";
+import { getTodayMissions } from "@/services/mission.service";
+import { getStreak } from "@/services/streak.service";
+import { getFriendsActivity } from "@/services/social.service";
+import { getUnreadNotifications } from "@/services/notification.service";
 
 export interface ProfileResponse {
   user_id: number;
@@ -36,7 +48,11 @@ export interface ProfileResponse {
   height_cm: number;
   weight_kg: number;
   goal: "LOSE_WEIGHT" | "GAIN_MUSCLE" | "MAINTAIN" | "EAT_HEALTHIER";
-  activity_level: "SEDENTARY" | "LIGHTLY_ACTIVE" | "MODERATELY_ACTIVE" | "VERY_ACTIVE";
+  activity_level:
+    | "SEDENTARY"
+    | "LIGHTLY_ACTIVE"
+    | "MODERATELY_ACTIVE"
+    | "VERY_ACTIVE";
   bmi: number;
   bmi_category: string;
   bmr: number;
@@ -188,18 +204,27 @@ export interface HomeDashboardData {
   challenge: CatalogueChallengeItemResponse | null;
 }
 
-function getTodayKey() {
-  return getLocalDateKey();
+export interface MissionItem {
+  text: string;
+  done: boolean;
 }
 
-function getNumericUserId(value: unknown) {
-  const numeric = Number(value);
+export interface StreakData {
+  current: number;
+  weeklyProgress: boolean[];
+}
 
-  if (Number.isFinite(numeric) && numeric > 0) {
-    return numeric;
-  }
+export interface FriendsActivityData {
+  activeCount: number;
+  latestActivity: string;
+}
 
-  return 1;
+export interface NotificationSummary {
+  unreadCount: number;
+}
+
+function getTodayKey() {
+  return getLocalDateKey();
 }
 
 function formatMacroValue(value: number, goal: number) {
@@ -207,13 +232,18 @@ function formatMacroValue(value: number, goal: number) {
 }
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, isHydrated } = useAuth();
 
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInput, setWeightInput] = useState("");
-  const [dashboardData, setDashboardData] = useState<HomeDashboardData | null>(null);
-
-  const userId = useMemo(() => getNumericUserId(user?.id), [user?.id]);
+  const [dashboardData, setDashboardData] = useState<HomeDashboardData | null>(
+    null,
+  );
+  const [missions, setMissions] = useState<MissionItem[]>([]);
+  const [streak, setStreak] = useState<StreakData | null>(null);
+  const [friendsActivity, setFriendsActivity] =
+    useState<FriendsActivityData | null>(null);
+  const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
 
   const displayName = useMemo(() => {
     const rawName = user?.display_name || user?.email?.split("@")[0] || "there";
@@ -221,120 +251,180 @@ export default function HomeScreen() {
     return rawName.trim() || "there";
   }, [user?.display_name, user?.email]);
 
-  const calorieProgress = dashboardData 
-    ? Math.min(dashboardData.calories.logged / dashboardData.calories.target, 1) 
+  const calorieProgress = dashboardData
+    ? Math.min(dashboardData.calories.logged / dashboardData.calories.target, 1)
     : 0;
 
-  const onTrack = dashboardData 
-    ? dashboardData.calories.logged > 0 && dashboardData.calories.logged <= dashboardData.calories.target
+  const onTrack = dashboardData
+    ? dashboardData.calories.logged > 0 &&
+      dashboardData.calories.logged <= dashboardData.calories.target
     : true;
 
   const isFetchingRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
+      mountedRef.current = true;
 
       async function loadDashboard() {
         if (isFetchingRef.current) return;
         isFetchingRef.current = true;
 
+        // Auth readiness gate — block fetches until auth is fully hydrated
+        if (!isHydrated || !user?.id) {
+          console.warn("[HomeScreen] loadDashboard skipped — auth not ready");
+          isFetchingRef.current = false;
+          return;
+        }
+
+        // Mounted guard
+        if (!mountedRef.current) return;
+
         try {
           // Step 1: GET /profile
-          let profile: ProfileResponse;
-          try {
-            profile = await api.get<ProfileResponse>("/profile");
-            if (!profile || profile.onboarding_done === false) {
-              if (isActive) {
-                router.replace("/welcome-setup");
+          // Home screen NEVER redirects on 404.
+          // AuthContext is the ONLY component allowed to route based on onboarding.
+          // On 404: show loading state, retry once after 500ms, then render with empty data.
+          let profile: ProfileResponse | null = null;
+          let profileError: any = null;
+
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              profile = await getMyProfile({
+                file: "home.tsx",
+                route: "HomeScreen",
+              });
+              profileError = null;
+              break;
+            } catch (err: any) {
+              profileError = err;
+              if (err?.status === 404 && attempt === 0) {
+                // Retry once after 500ms for transient 404
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                continue;
               }
-              return;
+              break;
             }
-          } catch (profileErr: any) {
-            if (profileErr?.status === 404) {
-              if (isActive) {
-                router.replace("/welcome-setup");
-              }
-            } else {
-              console.warn("[HomeScreen] Profile fetch failed:", profileErr);
-            }
-            return;
           }
+
+          if (profileError) {
+            console.warn("[HomeScreen] Profile fetch failed:", profileError);
+            // Do NOT redirect. Render with empty profile data.
+            profile = {
+              user_id: 0,
+              display_name: "",
+              avatar_url: "",
+              email: "",
+              age: 0,
+              gender: "MALE",
+              height_cm: 0,
+              weight_kg: 0,
+              goal: "MAINTAIN",
+              activity_level: "SEDENTARY",
+              bmi: 0,
+              bmi_category: "",
+              bmr: 0,
+              tdee: 0,
+              calorie_target: 2000,
+              protein_target_g: 120,
+              carb_target_g: 250,
+              fat_target_g: 65,
+              water_target_ml: 2000,
+              social_enabled: false,
+              onboarding_done: false,
+            };
+          }
+
+          // At this point profile is guaranteed non-null
+          const safeProfile = profile!;
 
           if (!isActive) return;
 
-          // Step 2: Fetch remaining APIs in parallel using Promise.allSettled
+          if (!isActive) return;
+
+          // Sequential fetch order (Rule C):
+          // Step 1: profile (already done above)
+          // Step 2: health summary
+          // Step 3: meals
+          // Step 4: water
+          // Step 5: ai advice
+          // Step 6: challenges
           const today = getTodayKey();
-          const [
-            healthResult,
-            mealsResult,
-            waterResult,
-            aiResult,
-            challengesResult,
-          ] = await Promise.allSettled([
-            api.get<HealthSummaryResponse>("/health/summary"),
-            api.get<DailyMealsResponse>(`/meals?date=${today}`),
-            api.get<WaterDayResponse>(`/water?date=${today}`),
-            api.post<AdviceResponse>("/ai/advice", {}),
-            api.get<GetChallengeCatalogueResponse | CatalogueChallengeItemResponse[]>("/social/challenges"),
-          ]);
+
+          // Step 2: health summary
+          const health = await getHealthSummary();
 
           if (!isActive) return;
 
-          // Resolve results & handle fallback policies
-          const health = healthResult.status === "fulfilled" ? healthResult.value : null;
-          if (healthResult.status === "rejected") {
-            console.warn("[HomeScreen] Health summary fetch failed:", healthResult.reason);
-          }
+          // Step 3: meals
+          const meals = await getDailyMeals(today);
+          console.log(
+            "[HomeScreen] mealsData =",
+            JSON.stringify(meals, null, 2),
+          );
 
-          const meals = mealsResult.status === "fulfilled" ? mealsResult.value : {
-            daily_totals: {
-              calories: 0,
-              protein_g: 0,
-              carb_g: 0,
-              fat_g: 0,
-            },
-          };
-          if (mealsResult.status === "rejected") {
-            console.warn("[HomeScreen] Meals fetch failed:", mealsResult.reason);
-          }
+          if (!isActive) return;
 
-          const water = waterResult.status === "fulfilled" ? waterResult.value : {
-            total_ml: 0,
-            daily_total_ml: 0,
-            water_target_ml: profile.water_target_ml ?? 2000,
-          };
-          if (waterResult.status === "rejected") {
-            console.warn("[HomeScreen] Water fetch failed:", waterResult.reason);
-          }
+          // Step 4: water
+          const water = await getDailyWater(
+            today,
+            safeProfile.water_target_ml ?? 2000,
+          );
 
-          const ai = aiResult.status === "fulfilled" ? aiResult.value : null;
-          if (aiResult.status === "rejected") {
-            console.warn("[HomeScreen] AI advice fetch failed:", aiResult.reason);
-          }
+          if (!isActive) return;
 
-          const challengesRaw = challengesResult.status === "fulfilled" ? challengesResult.value : null;
-          if (challengesResult.status === "rejected") {
-            console.warn("[HomeScreen] Challenges fetch failed:", challengesResult.reason);
-          }
+          // Step 5: ai advice
+          // Rule D: 403 ONBOARDING_REQUIRED -> log warning only, do NOT redirect
+          const ai = await getAiAdvice();
 
-          // Challenges mapping
-          let challengesList: CatalogueChallengeItemResponse[] = [];
-          if (challengesRaw) {
-            if (Array.isArray(challengesRaw)) {
-              challengesList = challengesRaw;
-            } else if (challengesRaw && Array.isArray((challengesRaw as any).catalogue)) {
-              challengesList = (challengesRaw as any).catalogue;
-            }
-          }
-          const challenge = challengesList.length > 0 ? challengesList[0] : null;
+          if (!isActive) return;
+
+          // Step 6: challenges
+          // Rule D: 403 ONBOARDING_REQUIRED -> log warning only, do NOT redirect
+          const challengesRaw = await getChallenges();
+          const challengesList = mapChallenges(challengesRaw);
+          const challenge =
+            challengesList.length > 0 ? challengesList[0] : null;
+
+          if (!isActive) return;
+
+          // Step 7: missions
+          const missionsData = await getTodayMissions();
+          setMissions(missionsData);
+
+          if (!isActive) return;
+
+          // Step 8: streak
+          const streakData = await getStreak();
+          setStreak(streakData);
+
+          if (!isActive) return;
+
+          // Step 9: friends activity
+          const friendsData = await getFriendsActivity();
+          setFriendsActivity(friendsData);
+
+          if (!isActive) return;
+
+          // Step 10: notifications unread count
+          const unreadCount = await getUnreadNotifications();
+          setUnreadNotifications(unreadCount);
+
+          if (!isActive) return;
 
           // Target values setup
-          const calorie_target = health?.calorie_target ?? profile.calorie_target ?? 2000;
-          const protein_target = health?.protein_target_g ?? profile.protein_target_g ?? 120;
-          const carb_target = health?.carb_target_g ?? profile.carb_target_g ?? 250;
-          const fat_target = health?.fat_target_g ?? profile.fat_target_g ?? 65;
-          const water_target = profile.water_target_ml ?? health?.water_target_ml ?? 2000;
+          const calorie_target =
+            health?.calorie_target ?? safeProfile.calorie_target ?? 2000;
+          const protein_target =
+            health?.protein_target_g ?? safeProfile.protein_target_g ?? 120;
+          const carb_target =
+            health?.carb_target_g ?? safeProfile.carb_target_g ?? 250;
+          const fat_target =
+            health?.fat_target_g ?? safeProfile.fat_target_g ?? 65;
+          const water_target =
+            safeProfile.water_target_ml ?? health?.water_target_ml ?? 2000;
 
           // Latest weight parsing
           let weightData = null;
@@ -375,11 +465,14 @@ export default function HomeScreen() {
               target: fat_target,
             },
             water: {
-              logged: (water.total_ml !== undefined ? water.total_ml : water.daily_total_ml) ?? 0,
+              logged:
+                (water.total_ml !== undefined
+                  ? water.total_ml
+                  : water.daily_total_ml) ?? 0,
               target: water_target,
             },
             weight: weightData,
-            insight: ai ? (ai.message || ai.advice) : null,
+            insight: ai ? ai.message || ai.advice : null,
             challenge,
           };
 
@@ -395,8 +488,10 @@ export default function HomeScreen() {
 
       return () => {
         isActive = false;
+        mountedRef.current = false;
+        isFetchingRef.current = false;
       };
-    }, [userId])
+    }, [isHydrated, user?.id]),
   );
 
   return (
@@ -415,6 +510,13 @@ export default function HomeScreen() {
 
           <TouchableOpacity style={styles.bellBtn}>
             <Bell size={20} color="#475569" />
+            {unreadNotifications > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>
+                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -429,15 +531,20 @@ export default function HomeScreen() {
                 styles.progressCircle,
                 {
                   borderColor:
-                    (dashboardData?.calories.logged || 0) > (dashboardData?.calories.target || 2000)
+                    (dashboardData?.calories.logged || 0) >
+                    (dashboardData?.calories.target || 2000)
                       ? "#EF4444"
                       : "#10B981",
                   opacity: (dashboardData?.calories.logged || 0) > 0 ? 1 : 0.55,
                 },
               ]}
             >
-              <Text style={styles.kcal}>{Math.round(dashboardData?.calories.logged || 0)}</Text>
-              <Text style={styles.kcalSub}>/ {dashboardData?.calories.target || 2000} kcal</Text>
+              <Text style={styles.kcal}>
+                {Math.round(dashboardData?.calories.logged || 0)}
+              </Text>
+              <Text style={styles.kcalSub}>
+                / {dashboardData?.calories.target || 2000} kcal
+              </Text>
               <Text style={styles.kcalPercent}>
                 {Math.round(calorieProgress * 100)}%
               </Text>
@@ -446,17 +553,26 @@ export default function HomeScreen() {
             <View style={styles.macroWrap}>
               <Macro
                 label="Protein"
-                value={formatMacroValue(dashboardData?.protein.logged || 0, dashboardData?.protein.target || 120)}
+                value={formatMacroValue(
+                  dashboardData?.protein.logged || 0,
+                  dashboardData?.protein.target || 120,
+                )}
                 color="#8B5CF6"
               />
               <Macro
                 label="Carbs"
-                value={formatMacroValue(dashboardData?.carbs.logged || 0, dashboardData?.carbs.target || 250)}
+                value={formatMacroValue(
+                  dashboardData?.carbs.logged || 0,
+                  dashboardData?.carbs.target || 250,
+                )}
                 color="#06B6D4"
               />
               <Macro
                 label="Fat"
-                value={formatMacroValue(dashboardData?.fat.logged || 0, dashboardData?.fat.target || 65)}
+                value={formatMacroValue(
+                  dashboardData?.fat.logged || 0,
+                  dashboardData?.fat.target || 65,
+                )}
                 color="#F59E0B"
               />
             </View>
@@ -465,13 +581,17 @@ export default function HomeScreen() {
           <View
             style={[
               styles.trackBox,
-              !onTrack && (dashboardData?.calories.logged || 0) > 0 && styles.warningBox,
+              !onTrack &&
+                (dashboardData?.calories.logged || 0) > 0 &&
+                styles.warningBox,
             ]}
           >
             <Text
               style={[
                 styles.trackText,
-                !onTrack && (dashboardData?.calories.logged || 0) > 0 && styles.warningText,
+                !onTrack &&
+                  (dashboardData?.calories.logged || 0) > 0 &&
+                  styles.warningText,
               ]}
             >
               {(dashboardData?.calories.logged || 0) <= 0
@@ -495,31 +615,54 @@ export default function HomeScreen() {
               <Text style={styles.missionSub}>Your roadmap for today</Text>
             </View>
 
-            <Text style={styles.progressText}>2/4</Text>
+            <Text style={styles.progressText}>
+              {missions.length > 0
+                ? `${missions.filter((m) => m.done).length}/${missions.length}`
+                : "2/4"}
+            </Text>
           </View>
 
-          <Mission text="Drink 8 glasses of water" done />
-          <Mission text="Eat 40g protein" />
-          <Mission text="Complete 3 meals" />
-          <Mission text="Keep under 1800 kcal" done />
+          {missions.length > 0
+            ? missions.map((mission, index) => (
+                <Mission key={index} text={mission.text} done={mission.done} />
+              ))
+            : [
+                <Mission
+                  key="fallback-1"
+                  text="Drink 8 glasses of water"
+                  done
+                />,
+                <Mission key="fallback-2" text="Eat 40g protein" />,
+                <Mission key="fallback-3" text="Complete 3 meals" />,
+                <Mission key="fallback-4" text="Keep under 1800 kcal" done />,
+              ]}
         </View>
 
         {/* STREAK */}
         <View style={styles.streakCard}>
           <Text style={styles.streakLabel}>Daily Streak</Text>
-          <Text style={styles.streakTitle}>🔥 6 Days</Text>
+          <Text style={styles.streakTitle}>🔥 {streak?.current ?? 6} Days</Text>
           <Text style={styles.streakSub}>
-            You’ve stayed consistent for 6 days
+            {streak
+              ? `You’ve stayed consistent for ${streak.current} days`
+              : "You’ve stayed consistent for 6 days"}
           </Text>
 
           <View style={styles.streakBar}>
-            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+            {(
+              streak?.weeklyProgress ?? [
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+                false,
+              ]
+            ).map((done, i) => (
               <View
                 key={i}
-                style={[
-                  styles.streakDot,
-                  i <= 6 && { backgroundColor: "white" },
-                ]}
+                style={[styles.streakDot, done && { backgroundColor: "white" }]}
               />
             ))}
           </View>
@@ -535,12 +678,14 @@ export default function HomeScreen() {
               <View>
                 <Text style={styles.weightLabel}>Weekly Weight Check</Text>
                 <Text style={styles.weight}>
-                  {dashboardData?.weight ? `${dashboardData.weight.latest_kg} kg` : "-- kg"}
+                  {dashboardData?.weight
+                    ? `${dashboardData.weight.latest_kg} kg`
+                    : "-- kg"}
                 </Text>
                 <Text style={styles.weightSub}>
-                  {dashboardData?.weight 
-                    ? dashboardData.weight.days_ago === 0 
-                      ? "Updated today" 
+                  {dashboardData?.weight
+                    ? dashboardData.weight.days_ago === 0
+                      ? "Updated today"
                       : `Last updated ${dashboardData.weight.days_ago} days ago`
                     : "No weight logged yet"}
                 </Text>
@@ -603,9 +748,14 @@ export default function HomeScreen() {
           <View style={styles.friendCard}>
             <View style={{ flex: 1 }}>
               <Text style={styles.friendLabel}>Friends Motivation</Text>
-              <Text style={styles.friendTitle}>4 friends active 💪</Text>
+              <Text style={styles.friendTitle}>
+                {friendsActivity
+                  ? `${friendsActivity.activeCount} friends active 💪`
+                  : "4 friends active 💪"}
+              </Text>
               <Text style={styles.friendSub}>
-                Linh completed hydration • Minh hit protein target
+                {friendsActivity?.latestActivity ||
+                  "Linh completed hydration • Minh hit protein target"}
               </Text>
             </View>
 
@@ -643,7 +793,7 @@ export default function HomeScreen() {
                           (dashboardData.challenge.my_enrollment.day_current /
                             dashboardData.challenge.my_enrollment.day_total) *
                             100,
-                          100
+                          100,
                         )}%`
                       : "72%",
                   },
@@ -658,11 +808,14 @@ export default function HomeScreen() {
           <Text style={styles.insightBadge}>AI Insight</Text>
 
           <Text style={styles.insightTitle}>
-            {dashboardData?.insight ? "AI Recommendation" : "You are low on protein today"}
+            {dashboardData?.insight
+              ? "AI Recommendation"
+              : "You are low on protein today"}
           </Text>
 
           <Text style={styles.insightSub}>
-            {dashboardData?.insight || "Try chicken breast, yogurt, or eggs for dinner."}
+            {dashboardData?.insight ||
+              "Try chicken breast, yogurt, or eggs for dinner."}
           </Text>
 
           <TouchableOpacity
@@ -776,6 +929,25 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  bellBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    backgroundColor: "#EF4444",
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+
+  bellBadgeText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "700",
   },
 
   card: {

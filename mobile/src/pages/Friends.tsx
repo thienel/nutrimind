@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef } from "react";
 import { useFocusEffect, router } from "expo-router";
 import {
   View,
@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, Flame, Droplets, WifiOff } from "lucide-react-native";
 
 import { useNetwork } from "@/context/NetworkContext";
+import { useAuth } from "@/context/AuthContext";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { OfflineEmptyState } from "@/components/OfflineEmptyState";
 
@@ -31,6 +32,8 @@ export default function Friends() {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
   const { isOnline } = useNetwork();
+  const { isHydrated, user } = useAuth();
+  const mountedRef = useRef(true);
 
   /**
    * Hàm load lại toàn bộ danh sách bạn bè + request
@@ -40,6 +43,12 @@ export default function Friends() {
    * - tiện gọi lại sau khi accept/reject
    */
   const loadFriends = useCallback(async () => {
+    // Auth readiness gate — block fetches until auth is fully hydrated
+    if (!isHydrated || !user) {
+      console.warn("[Friends] loadFriends skipped — auth not ready");
+      return;
+    }
+
     try {
       // gọi API lấy danh sách bạn bè
       const res = await getFriends();
@@ -54,7 +63,7 @@ export default function Friends() {
       // log lỗi nếu API fail
       console.log("GET FRIENDS ERROR:", err);
     }
-  }, []);
+  }, [isHydrated, user?.id]);
 
   /**
    * useFocusEffect:
@@ -69,19 +78,30 @@ export default function Friends() {
       // flag kiểm tra component còn active không
       // tránh lỗi setState sau khi unmount
       let isActive = true;
+      mountedRef.current = true;
 
       const fetchData = async () => {
+        // Auth readiness gate — block fetches until auth is fully hydrated
+        if (!isHydrated || !user) {
+          console.warn("[Friends] fetchData skipped — auth not ready");
+          return;
+        }
+
+        // Mounted guard
+        if (!mountedRef.current) return;
+
         try {
           // gọi API lấy friend list
           const res = await getFriends();
 
           // nếu screen đã unmount thì dừng
-          if (!isActive) return;
+          if (!isActive || !mountedRef.current) return;
 
           // update state khi còn active
           setFriends(res.friends || []);
           setPendingRequests(res.pending_received || []);
         } catch (err) {
+          if (!mountedRef.current) return;
           console.log("GET FRIENDS ERROR:", err);
         }
       };
@@ -97,8 +117,9 @@ export default function Friends() {
        */
       return () => {
         isActive = false;
+        mountedRef.current = false;
       };
-    }, []),
+    }, [isHydrated, user?.id]),
   );
 
   /**
@@ -225,7 +246,9 @@ export default function Friends() {
                 </View>
 
                 <View>
-                  <Text style={styles.statNumber}>{pendingRequests.length}</Text>
+                  <Text style={styles.statNumber}>
+                    {pendingRequests.length}
+                  </Text>
                   <Text style={styles.statLabel}>Requests</Text>
                 </View>
               </View>

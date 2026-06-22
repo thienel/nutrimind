@@ -1,5 +1,16 @@
 import { api } from "@/lib/apiClient";
 
+// Single-flight: đảm bảo chỉ 1 GET /profile request chạy tại một thời điểm
+// Các caller khác sẽ await promise này thay vì gọi API lại
+let profileFetchPromise: Promise<ProfileResponse> | null = null;
+
+// Trace: log caller info for debugging inconsistent responses
+let profileCallerTrace: {
+  file: string;
+  route: string;
+  userId?: number;
+} | null = null;
+
 // =======================================================
 // Payload gửi lên backend khi user setup onboarding
 // hoặc update personal information
@@ -103,8 +114,44 @@ export async function completeOnboarding(
 // - Personal Information screen
 // - App layout check setup
 // =======================================================
-export async function getMyProfile(): Promise<ProfileResponse> {
-  return api.get("/profile");
+export async function getMyProfile(options?: {
+  file?: string;
+  route?: string;
+}): Promise<ProfileResponse> {
+  const callerFile = options?.file || "unknown";
+  const callerRoute = options?.route || "unknown";
+
+  // Trace caller for debugging
+  console.log(`[ProfileCaller] file=${callerFile} route=${callerRoute}`);
+
+  // Nếu đang có request đang chạy -> reuse
+  if (profileFetchPromise) {
+    console.log(
+      `[ProfileCaller] Reusing in-flight profile request from ${profileCallerTrace?.file || "unknown"}`,
+    );
+    return profileFetchPromise;
+  }
+
+  // Tạo request mới
+  profileFetchPromise = api
+    .get<ProfileResponse>("/profile")
+    .then((profile) => {
+      // Log success with user_id for mismatch detection
+      console.log(
+        `[ProfileCompare] authUserId=${profile.user_id} onboarding_done=${profile.onboarding_done}`,
+      );
+      return profile;
+    })
+    .finally(() => {
+      // Reset sau khi xong (thành công hoặc lỗi)
+      profileFetchPromise = null;
+      profileCallerTrace = null;
+    });
+
+  // Store caller info for debugging
+  profileCallerTrace = { file: callerFile, route: callerRoute };
+
+  return profileFetchPromise;
 }
 
 // =======================================================
