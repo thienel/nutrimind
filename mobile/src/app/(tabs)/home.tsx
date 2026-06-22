@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -23,9 +23,170 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import { useAuth } from "@/context/AuthContext";
-import { getDashboardData, DashboardData } from "@/db/repositories/dashboard.repo";
-
+import { api } from "@/lib/apiClient";
 import { getLocalDateKey } from "@/lib/dateUtils";
+
+export interface ProfileResponse {
+  user_id: number;
+  display_name: string;
+  avatar_url: string;
+  email: string;
+  age: number;
+  gender: "MALE" | "FEMALE";
+  height_cm: number;
+  weight_kg: number;
+  goal: "LOSE_WEIGHT" | "GAIN_MUSCLE" | "MAINTAIN" | "EAT_HEALTHIER";
+  activity_level: "SEDENTARY" | "LIGHTLY_ACTIVE" | "MODERATELY_ACTIVE" | "VERY_ACTIVE";
+  bmi: number;
+  bmi_category: string;
+  bmr: number;
+  tdee: number;
+  calorie_target: number;
+  protein_target_g: number;
+  carb_target_g: number;
+  fat_target_g: number;
+  water_target_ml: number;
+  social_enabled: boolean;
+  onboarding_done: boolean;
+}
+
+export interface LatestWeightSummary {
+  weight_kg: number;
+  logged_at: string;
+  days_ago?: number;
+}
+
+export interface WeightPointDTO {
+  logged_at: string;
+  weight_kg: number;
+}
+
+export interface HealthSummaryResponse {
+  bmi: number;
+  bmi_category: string;
+  bmr: number;
+  tdee: number;
+  calorie_target: number;
+  protein_target_g: number;
+  carb_target_g: number;
+  fat_target_g: number;
+  water_target_ml: number;
+  latest_weight: LatestWeightSummary | null;
+  weight_history: WeightPointDTO[];
+}
+
+export interface MealEntryResponse {
+  id: number;
+  food_name: string;
+  meal_type: string;
+  calories: number;
+  protein_g: number;
+  carb_g: number;
+  fat_g: number;
+  source: string;
+  logged_date: string;
+  created_at: string;
+}
+
+export interface MealsByTypeResponse {
+  breakfast: MealEntryResponse[];
+  lunch: MealEntryResponse[];
+  dinner: MealEntryResponse[];
+  snack: MealEntryResponse[];
+}
+
+export interface MealDailyTotalsResponse {
+  calories: number;
+  protein_g: number;
+  carb_g: number;
+  fat_g: number;
+}
+
+export interface DailyMealsResponse {
+  date: string;
+  meals: MealsByTypeResponse;
+  daily_totals: MealDailyTotalsResponse;
+}
+
+export interface WaterEntryResponse {
+  id: number;
+  volume_ml: number;
+  created_at: string;
+}
+
+export interface WaterDayResponse {
+  date: string;
+  entries: WaterEntryResponse[];
+  daily_total_ml: number;
+  water_target_ml: number;
+  total_ml?: number;
+}
+
+export interface AdviceContextSummaryResponse {
+  calories_logged: number;
+  calorie_target: number;
+  water_ml_logged: number;
+  water_target_ml: number;
+}
+
+export interface AdviceResponse {
+  advice: string;
+  disclaimer: string;
+  context_summary: AdviceContextSummaryResponse;
+  message?: string;
+}
+
+export interface EnrollmentSummaryResponse {
+  enrollment_id: number;
+  start_date: string;
+  end_date: string;
+  status: string;
+  day_current: number;
+  day_total: number;
+}
+
+export interface CatalogueChallengeItemResponse {
+  id: number;
+  name: string;
+  type: string;
+  duration_days: number;
+  description: string;
+  friends_enrolled: number;
+  my_enrollment: EnrollmentSummaryResponse | null;
+}
+
+export interface GetChallengeCatalogueResponse {
+  catalogue: CatalogueChallengeItemResponse[];
+}
+
+export interface HomeDashboardData {
+  calories: {
+    logged: number;
+    target: number;
+  };
+  protein: {
+    logged: number;
+    target: number;
+  };
+  carbs: {
+    logged: number;
+    target: number;
+  };
+  fat: {
+    logged: number;
+    target: number;
+  };
+  water: {
+    logged: number;
+    target: number;
+  };
+  weight: {
+    latest_kg: number;
+    days_ago: number;
+  } | null;
+  insight: string | null;
+  challenge: CatalogueChallengeItemResponse | null;
+}
 
 function getTodayKey() {
   return getLocalDateKey();
@@ -50,7 +211,7 @@ export default function HomeScreen() {
 
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightInput, setWeightInput] = useState("");
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardData, setDashboardData] = useState<HomeDashboardData | null>(null);
 
   const userId = useMemo(() => getNumericUserId(user?.id), [user?.id]);
 
@@ -68,19 +229,165 @@ export default function HomeScreen() {
     ? dashboardData.calories.logged > 0 && dashboardData.calories.logged <= dashboardData.calories.target
     : true;
 
+  const isFetchingRef = useRef(false);
+
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
 
       async function loadDashboard() {
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
+
         try {
-          const data = await getDashboardData(userId, getTodayKey());
+          // Step 1: GET /profile
+          let profile: ProfileResponse;
+          try {
+            profile = await api.get<ProfileResponse>("/profile");
+            if (!profile || profile.onboarding_done === false) {
+              if (isActive) {
+                router.replace("/welcome-setup");
+              }
+              return;
+            }
+          } catch (profileErr: any) {
+            if (profileErr?.status === 404) {
+              if (isActive) {
+                router.replace("/welcome-setup");
+              }
+            } else {
+              console.warn("[HomeScreen] Profile fetch failed:", profileErr);
+            }
+            return;
+          }
 
           if (!isActive) return;
 
-          setDashboardData(data);
+          // Step 2: Fetch remaining APIs in parallel using Promise.allSettled
+          const today = getTodayKey();
+          const [
+            healthResult,
+            mealsResult,
+            waterResult,
+            aiResult,
+            challengesResult,
+          ] = await Promise.allSettled([
+            api.get<HealthSummaryResponse>("/health/summary"),
+            api.get<DailyMealsResponse>(`/meals?date=${today}`),
+            api.get<WaterDayResponse>(`/water?date=${today}`),
+            api.post<AdviceResponse>("/ai/advice", {}),
+            api.get<GetChallengeCatalogueResponse | CatalogueChallengeItemResponse[]>("/social/challenges"),
+          ]);
+
+          if (!isActive) return;
+
+          // Resolve results & handle fallback policies
+          const health = healthResult.status === "fulfilled" ? healthResult.value : null;
+          if (healthResult.status === "rejected") {
+            console.warn("[HomeScreen] Health summary fetch failed:", healthResult.reason);
+          }
+
+          const meals = mealsResult.status === "fulfilled" ? mealsResult.value : {
+            daily_totals: {
+              calories: 0,
+              protein_g: 0,
+              carb_g: 0,
+              fat_g: 0,
+            },
+          };
+          if (mealsResult.status === "rejected") {
+            console.warn("[HomeScreen] Meals fetch failed:", mealsResult.reason);
+          }
+
+          const water = waterResult.status === "fulfilled" ? waterResult.value : {
+            total_ml: 0,
+            daily_total_ml: 0,
+            water_target_ml: profile.water_target_ml ?? 2000,
+          };
+          if (waterResult.status === "rejected") {
+            console.warn("[HomeScreen] Water fetch failed:", waterResult.reason);
+          }
+
+          const ai = aiResult.status === "fulfilled" ? aiResult.value : null;
+          if (aiResult.status === "rejected") {
+            console.warn("[HomeScreen] AI advice fetch failed:", aiResult.reason);
+          }
+
+          const challengesRaw = challengesResult.status === "fulfilled" ? challengesResult.value : null;
+          if (challengesResult.status === "rejected") {
+            console.warn("[HomeScreen] Challenges fetch failed:", challengesResult.reason);
+          }
+
+          // Challenges mapping
+          let challengesList: CatalogueChallengeItemResponse[] = [];
+          if (challengesRaw) {
+            if (Array.isArray(challengesRaw)) {
+              challengesList = challengesRaw;
+            } else if (challengesRaw && Array.isArray((challengesRaw as any).catalogue)) {
+              challengesList = (challengesRaw as any).catalogue;
+            }
+          }
+          const challenge = challengesList.length > 0 ? challengesList[0] : null;
+
+          // Target values setup
+          const calorie_target = health?.calorie_target ?? profile.calorie_target ?? 2000;
+          const protein_target = health?.protein_target_g ?? profile.protein_target_g ?? 120;
+          const carb_target = health?.carb_target_g ?? profile.carb_target_g ?? 250;
+          const fat_target = health?.fat_target_g ?? profile.fat_target_g ?? 65;
+          const water_target = profile.water_target_ml ?? health?.water_target_ml ?? 2000;
+
+          // Latest weight parsing
+          let weightData = null;
+          const latestWeightObj = health?.latest_weight;
+          if (latestWeightObj) {
+            let daysAgo = 0;
+            if (latestWeightObj.days_ago !== undefined) {
+              daysAgo = latestWeightObj.days_ago;
+            } else if (latestWeightObj.logged_at) {
+              const todayObj = new Date(new Date().toLocaleDateString("en-CA"));
+              const weightDateObj = new Date(latestWeightObj.logged_at);
+              const diffTime = todayObj.getTime() - weightDateObj.getTime();
+              const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+              daysAgo = diffDays < 0 ? 0 : diffDays;
+            }
+            weightData = {
+              latest_kg: latestWeightObj.weight_kg,
+              days_ago: daysAgo,
+            };
+          }
+
+          // State mapping
+          const mappedData: HomeDashboardData = {
+            calories: {
+              logged: meals.daily_totals.calories ?? 0,
+              target: calorie_target,
+            },
+            protein: {
+              logged: meals.daily_totals.protein_g ?? 0,
+              target: protein_target,
+            },
+            carbs: {
+              logged: meals.daily_totals.carb_g ?? 0,
+              target: carb_target,
+            },
+            fat: {
+              logged: meals.daily_totals.fat_g ?? 0,
+              target: fat_target,
+            },
+            water: {
+              logged: (water.total_ml !== undefined ? water.total_ml : water.daily_total_ml) ?? 0,
+              target: water_target,
+            },
+            weight: weightData,
+            insight: ai ? (ai.message || ai.advice) : null,
+            challenge,
+          };
+
+          setDashboardData(mappedData);
         } catch (error) {
           console.warn("[HomeScreen] Failed to load dashboard data:", error);
+        } finally {
+          isFetchingRef.current = false;
         }
       }
 
@@ -315,11 +622,33 @@ export default function HomeScreen() {
         >
           <View style={styles.challengeCard}>
             <Text style={styles.challengeLabel}>Active Challenge</Text>
-            <Text style={styles.challengeTitle}>Hydration Hero 💧</Text>
-            <Text style={styles.challengeSub}>5 / 7 days completed</Text>
+            <Text style={styles.challengeTitle}>
+              {dashboardData?.challenge?.name || "Hydration Hero 💧"}
+            </Text>
+            <Text style={styles.challengeSub}>
+              {dashboardData?.challenge?.my_enrollment
+                ? `${dashboardData.challenge.my_enrollment.day_current} / ${dashboardData.challenge.my_enrollment.day_total} days completed`
+                : dashboardData?.challenge
+                  ? `${dashboardData.challenge.duration_days} days challenge`
+                  : "5 / 7 days completed"}
+            </Text>
 
             <View style={styles.challengeProgress}>
-              <View style={styles.challengeFill} />
+              <View
+                style={[
+                  styles.challengeFill,
+                  {
+                    width: dashboardData?.challenge?.my_enrollment
+                      ? `${Math.min(
+                          (dashboardData.challenge.my_enrollment.day_current /
+                            dashboardData.challenge.my_enrollment.day_total) *
+                            100,
+                          100
+                        )}%`
+                      : "72%",
+                  },
+                ]}
+              />
             </View>
           </View>
         </TouchableOpacity>
@@ -328,13 +657,18 @@ export default function HomeScreen() {
         <View style={styles.insightCard}>
           <Text style={styles.insightBadge}>AI Insight</Text>
 
-          <Text style={styles.insightTitle}>You are low on protein today</Text>
-
-          <Text style={styles.insightSub}>
-            Try chicken breast, yogurt, or eggs for dinner.
+          <Text style={styles.insightTitle}>
+            {dashboardData?.insight ? "AI Recommendation" : "You are low on protein today"}
           </Text>
 
-          <TouchableOpacity style={styles.insightBtn}>
+          <Text style={styles.insightSub}>
+            {dashboardData?.insight || "Try chicken breast, yogurt, or eggs for dinner."}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.insightBtn}
+            onPress={() => router.push("/coach")}
+          >
             <Text style={styles.insightBtnText}>Ask AI Coach</Text>
             <ArrowRight size={18} color="white" />
           </TouchableOpacity>
