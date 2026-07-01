@@ -46,20 +46,20 @@ async function processSyncItem(item: SyncQueueItem): Promise<void> {
 
   if (item.action === "create") {
     if (item.entity === "meal") {
-      let mealType = (payload.mealType as string || "snack").toUpperCase();
+      let mealType = (payload.meal_type as string || "snack").toUpperCase();
       if (mealType !== "BREAKFAST" && mealType !== "LUNCH" && mealType !== "DINNER") {
         mealType = "SNACK";
       }
       const body = {
-        food_name: payload.name,
+        food_name: String(payload.food_name ?? payload.name ?? ""),
         meal_type: mealType,
         calories: Number(payload.calories),
-        protein_g: Number(payload.proteinG || 0),
-        carb_g: Number(payload.carbsG || 0),
-        fat_g: Number(payload.fatG || 0),
-        source: "MANUAL",
-        logged_date: (payload.loggedAt as string).slice(0, 10),
-        client_created_at: payload.loggedAt,
+        protein_g: Number(payload.protein_g ?? 0),
+        carb_g: Number(payload.carb_g ?? 0),
+        fat_g: Number(payload.fat_g ?? 0),
+        source: String(payload.source ?? "MANUAL"),
+        logged_date: String(payload.logged_date ?? ""),
+        client_created_at: String(payload.client_created_at ?? ""),
       };
       const res = await api.post<{ id: number }>("/meals", body);
       if (res && res.id) {
@@ -67,9 +67,9 @@ async function processSyncItem(item: SyncQueueItem): Promise<void> {
       }
     } else if (item.entity === "water") {
       const body = {
-        volume_ml: Number(payload.amount_ml),
-        logged_date: (payload.logged_at as string).slice(0, 10),
-        client_created_at: payload.logged_at,
+        volume_ml: Number(payload.volume_ml),
+        logged_date: String(payload.logged_date ?? ""),
+        client_created_at: String(payload.client_created_at ?? payload.logged_at ?? ""),
       };
       const res = await api.post<{ id: number }>("/water", body);
       if (res && res.id) {
@@ -83,9 +83,9 @@ async function processSyncItem(item: SyncQueueItem): Promise<void> {
     } else if (item.entity === "weight") {
       const body = {
         weight_kg: Number(payload.weight_kg),
-        logged_at: (payload.logged_at as string).slice(0, 10),
+        logged_at: String(payload.logged_date ?? payload.logged_at ?? ""),
         note: (payload.note as string) || "",
-        client_created_at: payload.logged_at,
+        client_created_at: String(payload.client_created_at ?? payload.logged_at ?? ""),
       };
       const res = await api.post<{ id: number }>("/health/weight", body);
       if (res && res.id) {

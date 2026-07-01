@@ -14,30 +14,52 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { completeOnboarding, getMyProfile } from "@/services/profileService";
 
 export function HealthSetup() {
-  // goal chuẩn backend
+  // =======================================================
+  // Goal người dùng chọn
+  // Phải match đúng enum backend để submit onboarding
+  // =======================================================
   const [goal, setGoal] = useState<"LOSE_WEIGHT" | "GAIN_MUSCLE" | "MAINTAIN">(
     "LOSE_WEIGHT",
   );
 
-  // activity chuẩn backend
+  // =======================================================
+  // Mức độ vận động của user
+  // Cũng phải đúng format backend yêu cầu
+  // =======================================================
   const [activity, setActivity] = useState<
     "SEDENTARY" | "MODERATELY_ACTIVE" | "VERY_ACTIVE"
   >("MODERATELY_ACTIVE");
 
-  // submit onboarding
+  // =======================================================
+  // Submit toàn bộ onboarding
+  // Đây là bước cuối cùng sau khi user hoàn thành setup
+  // =======================================================
   const handleFinish = async () => {
     try {
-      // lấy dữ liệu step 1
+      // Lấy dữ liệu step 1 đã lưu local trước đó
+      // (age, gender, height, weight)
       const saved = await AsyncStorage.getItem("onboarding_step_1");
 
+      // Nếu không có dữ liệu thì không thể submit
       if (!saved) {
         Alert.alert("Error", "Missing step 1 data");
         return;
       }
 
+      // Parse dữ liệu local thành object
       const step1 = JSON.parse(saved);
 
-      // gọi API onboarding
+      // =======================================================
+      // Gửi onboarding data lên backend
+      // Backend sẽ tính:
+      // - BMI
+      // - BMR
+      // - TDEE
+      // - calorie target
+      // - macro target
+      // - water target
+      // và set onboarding_done = true
+      // =======================================================
       await completeOnboarding({
         age: Number(step1.age),
         gender: step1.gender,
@@ -47,14 +69,26 @@ export function HealthSetup() {
         activity_level: activity,
       });
 
-      // Rule A: Retry getMyProfile up to 3 times to confirm onboarding_done = true
+      // =======================================================
+      // Rule A:
+      // Sau khi submit onboarding xong
+      // KHÔNG navigate ngay
+      //
+      // Phải fetch profile lại để xác nhận:
+      // onboarding_done đã thật sự commit ở backend
+      //
+      // Retry tối đa 3 lần vì backend có thể delay
+      // =======================================================
       let freshProfile: Awaited<ReturnType<typeof getMyProfile>> | null = null;
+
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           freshProfile = await getMyProfile({
             file: "HealthSetup.tsx",
             route: "handleFinish",
           });
+
+          // Nếu backend xác nhận onboarding_done=true thì dừng retry
           if (freshProfile.onboarding_done === true) {
             break;
           }
@@ -65,11 +99,14 @@ export function HealthSetup() {
           );
         }
 
+        // Delay 500ms trước lần thử tiếp theo
         if (attempt < 2) {
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
 
+      // Nếu sau 3 lần vẫn chưa confirm được onboarding
+      // thì báo lỗi cho user
       if (!freshProfile || freshProfile.onboarding_done !== true) {
         Alert.alert(
           "Error",
@@ -78,10 +115,17 @@ export function HealthSetup() {
         return;
       }
 
-      // clear local step data
+      // =======================================================
+      // Clear dữ liệu local onboarding step 1
+      // vì đã submit thành công
+      // =======================================================
       await AsyncStorage.removeItem("onboarding_step_1");
 
-      // Lưu profile mới vào cache để các màn khác dùng ngay
+      // =======================================================
+      // Cache profile mới nhất vào local
+      // để các màn khác dùng ngay không cần fetch lại
+      // (Profile screen / Home screen)
+      // =======================================================
       await AsyncStorage.setItem(
         "nutrimind_profile_cache",
         JSON.stringify({
@@ -97,10 +141,18 @@ export function HealthSetup() {
         }),
       );
 
-      // Navigate to Home only after backend confirms onboarding is fully committed
+      // =======================================================
+      // Chỉ chuyển sang Home sau khi backend confirm xong
+      // Điều này tránh bug:
+      // - Home fetch sớm
+      // - backend chưa commit onboarding_done
+      // - bị redirect về onboarding lại
+      // =======================================================
       router.replace("/(tabs)/home");
     } catch (error) {
       console.log(error);
+
+      // Catch lỗi tổng quát khi submit onboarding
       Alert.alert("Error", "Cannot complete onboarding");
     }
   };

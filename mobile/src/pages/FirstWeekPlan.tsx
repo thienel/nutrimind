@@ -12,51 +12,66 @@ import { CircleCheck, Target } from "lucide-react-native";
 
 import { getMyProfile } from "@/services/profileService";
 
+// Kiểu dữ liệu chỉ lấy phần cần dùng cho màn FirstWeekPlan
 type PlanData = {
   calorie_target: number;
   water_target_ml: number;
 };
 
 export function FirstWeekPlan() {
+  // State lưu kế hoạch tuần đầu
   const [plan, setPlan] = useState<PlanData | null>(null);
+
+  // State loading để show spinner trong lúc fetch API
   const [loading, setLoading] = useState(true);
 
-  // fetch profile khi mở màn
+  // Chạy 1 lần khi màn hình được mount
   useEffect(() => {
+    // Flag để tránh setState khi component đã unmount
     let cancelled = false;
 
     const load = async () => {
       try {
+        // Gọi API lấy profile mới nhất từ backend
         const res = await getMyProfile({
           file: "FirstWeekPlan.tsx",
           route: "loadPlan",
         });
 
+        // Nếu màn vẫn còn tồn tại thì mới update state
         if (!cancelled) {
           setPlan({
+            // Lấy target calories từ profile
             calorie_target: res.calorie_target,
+
+            // Lấy target nước uống từ profile
             water_target_ml: res.water_target_ml,
           });
         }
       } catch (error) {
+        // Nếu fetch lỗi thì log ra để debug
         if (!cancelled) {
           console.log("Lỗi fetch profile:", error);
         }
       } finally {
+        // Dù thành công hay fail cũng tắt loading
         if (!cancelled) {
           setLoading(false);
         }
       }
     };
 
+    // Gọi hàm fetch
     load();
 
+    // Cleanup khi rời màn hình
+    // Tránh warning "Can't perform a React state update on an unmounted component"
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, []); // [] = chỉ chạy 1 lần lúc mở màn
 
-  // loading
+  // Nếu đang loading thì show spinner
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>

@@ -132,16 +132,28 @@ export class SyncService {
 
     await this.queueRepo.markProcessing(item.id);
 
+    // Log payload trước khi gửi để debug mismatch camelCase/snake_case
+    const op = item.operation.toUpperCase() as "CREATE" | "DELETE";
+    const apiPath = this.getApiPath(item.entity_type, op);
+    console.log(
+      `[SyncService] ${op} ${apiPath} → queue_id=${item.id}, local_id=${item.local_id}`,
+      "\n  payload:",
+      JSON.stringify(payload),
+    );
+
     try {
-      const serverId = await this.callApi(
-        item.entity_type,
-        item.operation,
-        payload,
+      const serverId = await this.callApi(item.entity_type, op, payload);
+      console.log(
+        `[SyncService] OK  ${item.entity_type}/${item.operation} → server_id=${serverId ?? "N/A"}`,
       );
       await this.queueRepo.markDone(item.id);
       await this.updateEntryAfterSuccess(item, serverId);
       return "synced";
     } catch (err) {
+      console.error(
+        `[SyncService] ERR ${item.entity_type}/${item.operation} →`,
+        err instanceof Error ? err.message : String(err),
+      );
       if (err instanceof ApiAuthError) {
         // Restore to pending so it retries after re-login
         await this.queueRepo.markFailed(item.id, err.message);
@@ -170,7 +182,10 @@ export class SyncService {
               ];
               const existing = allMeals.find(
                 (m) =>
-                  m.food_name === p.food_name && m.meal_type === p.meal_type,
+                  m.food_name === p.food_name &&
+                  // Server trả về UPPERCASE, local DB lưu lowercase → so sánh sau khi upper
+                  m.meal_type?.toUpperCase() ===
+                    String(p.meal_type).toUpperCase(),
               );
               if (existing?.id) duplicateServerId = existing.id;
             } else if (item.entity_type === "water") {
@@ -245,6 +260,8 @@ export class SyncService {
         }
       }
 
+      // Backend create route KHÔNG có /create suffix.
+      // Route phải match swagger/backend router: POST /meals
       case "meal": {
         if (operation === "CREATE") {
           const p = payload as MealCreatePayload;
@@ -271,7 +288,8 @@ export class SyncService {
         }
       }
 
-      // ── Water (stub — backend endpoint not yet available) ─
+      // Backend create route KHÔNG có /create suffix.
+      // Route phải match swagger/backend router: POST /water
       case "water": {
         if (operation === "CREATE") {
           const p = payload as WaterCreatePayload;
@@ -290,6 +308,32 @@ export class SyncService {
 
       default:
         throw new Error(`Unknown entity type: ${entityType}`);
+    }
+  }
+
+  /**
+   * Trả về đường dẫn API thực tế dùng để log.
+   * Route create không được có id — chỉ POST không có /:id suffix.
+   * Route phải match swagger/backend router:
+   *   create -> POST /{entity}        (không /create, không /:id)
+   *   update -> PUT  /{entity}/:id
+   *   delete -> DELETE /{entity}/:id
+   */
+  private getApiPath(entityType: EntityType, operation: string): string {
+    // Chuẩn hoá operation về uppercase để tránh sai khi DB lưu lowercase
+    const op = operation.toUpperCase();
+    switch (entityType) {
+      case "water":
+        if (op === "CREATE") return "/water";
+        return "/water/:id";
+      case "meal":
+        if (op === "CREATE") return "/meals";
+        return "/meals/:id";
+      case "weight":
+        if (op === "CREATE") return "/health/weight";
+        return "/health/weight/:id";
+      default:
+        return `/${entityType}`;
     }
   }
 
@@ -435,8 +479,12 @@ export class SyncService {
 // Mapping local (lowercase) → backend enum (UPPERCASE)
 // ─────────────────────────────────────────────────────────
 
-/** Chuẩn hoá meal_type sang enum backend. "other" map về SNACK. */
-function toBackendMealType(value: string): string {
+/**
+ * Map meal type từ local (lowercase) sang backend enum.
+ * Backend yêu cầu enum: BREAKFAST, LUNCH, DINNER, SNACK.
+ * Nếu value undefined/null/unknown → fallback SNACK.
+ */
+function toBackendMealType(value?: string): string {
   switch ((value || "").toLowerCase()) {
     case "breakfast":
       return "BREAKFAST";
@@ -451,7 +499,11 @@ function toBackendMealType(value: string): string {
   }
 }
 
-/** Chuẩn hoá source sang enum backend (MANUAL | AI_PHOTO). */
-function toBackendSource(value: string): string {
+/**
+ * Map source từ local sang backend enum.
+ * Backend Go validate binding:"required,oneof=MANUAL AI_PHOTO".
+ * Gửi "AI" hoặc "MANUALLY" sẽ bị reject vì không nằm trong oneof.
+ */
+function toBackendSource(value?: string): string {
   return (value || "").toLowerCase() === "ai_photo" ? "AI_PHOTO" : "MANUAL";
 }

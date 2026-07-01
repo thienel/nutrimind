@@ -39,7 +39,6 @@ export async function logWeight(data: InsertWeightData): Promise<string> {
   const db = await getDb();
   const loggedAt = data.loggedAt ?? new Date().toISOString();
   const loggedDate = toLocalDateKey(loggedAt);
-  
   // 2. Validate date format (YYYY-MM-DD)
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!dateRegex.test(loggedDate)) {
@@ -51,7 +50,7 @@ export async function logWeight(data: InsertWeightData): Promise<string> {
     `SELECT 1 FROM local_weight_entries
      WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending'
      LIMIT 1;`,
-    [data.userId, loggedDate]
+    [data.userId, loggedDate],
   );
   if (existing) {
     throw new Error("Bạn đã ghi cân nặng cho ngày này rồi");
@@ -66,14 +65,24 @@ export async function logWeight(data: InsertWeightData): Promise<string> {
         local_id, server_id, user_id, weight_kg, logged_date, note,
         client_created_at, sync_status, sync_attempts, last_sync_error, created_at
       ) VALUES (?, NULL, ?, ?, ?, ?, ?, 'pending', 0, NULL, ?);`,
-      [id, data.userId, data.weightKg, loggedDate, data.note ?? null, loggedAt, now]
+      [
+        id,
+        data.userId,
+        data.weightKg,
+        loggedDate,
+        data.note ?? null,
+        loggedAt,
+        now,
+      ],
     );
 
+    // Payload phải khớp với WeightCreatePayload trong sync.service.ts
+    // Backend yêu cầu: weight_kg, logged_date, note (optional), client_created_at
     await enqueue("create", "weight", id, {
-      local_id: id,
       weight_kg: data.weightKg,
+      logged_date: loggedDate,
       note: data.note ?? null,
-      logged_at: loggedAt,
+      client_created_at: loggedAt,
     });
   });
 
@@ -86,7 +95,7 @@ export async function logWeight(data: InsertWeightData): Promise<string> {
 export async function getWeightHistory(
   userId: number,
   limit = 30,
-  offset = 0
+  offset = 0,
 ): Promise<WeightLog[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<any>(
@@ -94,7 +103,7 @@ export async function getWeightHistory(
      WHERE user_id = ? AND sync_status != 'deleted_pending'
      ORDER BY client_created_at DESC
      LIMIT ? OFFSET ?;`,
-    [userId, limit, offset]
+    [userId, limit, offset],
   );
 
   return rows.map((r) => ({
@@ -113,7 +122,7 @@ export async function getWeightHistory(
  * Cân nặng mới nhất được ghi.
  */
 export async function getLatestWeight(
-  userId: number
+  userId: number,
 ): Promise<WeightLog | null> {
   const db = await getDb();
   const r = await db.getFirstAsync<any>(
@@ -121,7 +130,7 @@ export async function getLatestWeight(
      WHERE user_id = ? AND sync_status != 'deleted_pending'
      ORDER BY client_created_at DESC
      LIMIT 1;`,
-    [userId]
+    [userId],
   );
 
   if (!r) return null;
@@ -143,7 +152,7 @@ export async function getLatestWeight(
  */
 export async function getWeightChartData(
   userId: number,
-  days = 30
+  days = 30,
 ): Promise<{ date: string; weight_kg: number }[]> {
   const db = await getDb();
   return db.getAllAsync<{ date: string; weight_kg: number }>(
@@ -155,27 +164,30 @@ export async function getWeightChartData(
      GROUP BY logged_date
      HAVING client_created_at = MAX(client_created_at)
      ORDER BY date ASC;`,
-    [userId, -days]
+    [userId, -days],
   );
 }
 
 /** Xóa mềm weight log */
 export async function deleteWeightLog(
   id: string,
-  userId: number
+  userId: number,
 ): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
     const entry = await db.getFirstAsync<{ server_id: string | null }>(
       `SELECT server_id FROM local_weight_entries WHERE local_id = ? AND user_id = ?;`,
-      [id, userId]
+      [id, userId],
     );
 
     if (!entry) return;
 
     if (entry.server_id == null) {
       // Trường hợp A
-      await db.runAsync(`DELETE FROM local_weight_entries WHERE local_id = ?;`, [id]);
+      await db.runAsync(
+        `DELETE FROM local_weight_entries WHERE local_id = ?;`,
+        [id],
+      );
       await db.runAsync(`DELETE FROM sync_queue WHERE local_id = ?;`, [id]);
     } else {
       // Trường hợp B & C
@@ -183,10 +195,11 @@ export async function deleteWeightLog(
         `UPDATE local_weight_entries
          SET sync_status = 'deleted_pending'
          WHERE local_id = ? AND user_id = ?;`,
-        [id, userId]
+        [id, userId],
       );
-      await enqueue("delete", "weight", id, { server_id: Number(entry.server_id) });
+      await enqueue("delete", "weight", id, {
+        server_id: Number(entry.server_id),
+      });
     }
   });
 }
-

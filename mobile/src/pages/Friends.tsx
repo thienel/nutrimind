@@ -9,7 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft, Flame, Droplets, WifiOff } from "lucide-react-native";
+import { ChevronLeft, Flame, Droplets } from "lucide-react-native";
 
 import { useNetwork } from "@/context/NetworkContext";
 import { useAuth } from "@/context/AuthContext";
@@ -44,7 +44,8 @@ export default function Friends() {
    */
   const loadFriends = useCallback(async () => {
     // Auth readiness gate — block fetches until auth is fully hydrated
-    if (!isHydrated || !user) {
+    // Dùng user?.id thay vì user (object) để khớp với deps array
+    if (!isHydrated || !user?.id) {
       console.warn("[Friends] loadFriends skipped — auth not ready");
       return;
     }
@@ -82,7 +83,8 @@ export default function Friends() {
 
       const fetchData = async () => {
         // Auth readiness gate — block fetches until auth is fully hydrated
-        if (!isHydrated || !user) {
+        // FIX: Dùng user?.id thay vì user (object) để khớp với deps array
+        if (!isHydrated || !user?.id) {
           console.warn("[Friends] fetchData skipped — auth not ready");
           return;
         }

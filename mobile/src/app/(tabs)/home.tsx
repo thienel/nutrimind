@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useRef } from "react";
+﻿import React, { useCallback, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import {
   Scale,
   X,
   Trophy,
+  CheckCircle,
+  Circle,
 } from "lucide-react-native";
 import { router, useFocusEffect } from "expo-router";
 
@@ -30,12 +32,11 @@ import {
   getDailyMeals,
   getDailyWater,
   getAiAdvice,
-  getChallenges,
-  mapChallenges,
 } from "@/services/home.service";
 import { getTodayMissions } from "@/services/mission.service";
 import { getStreak } from "@/services/streak.service";
 import { getFriendsActivity } from "@/services/social.service";
+import { getMyChallenges } from "@/services/challenge.service";
 import { getUnreadNotifications } from "@/services/notification.service";
 
 export interface ProfileResponse {
@@ -232,86 +233,133 @@ function formatMacroValue(value: number, goal: number) {
 }
 
 export default function HomeScreen() {
+  // Láº¥y thÃ´ng tin user hiá»‡n táº¡i vÃ  tráº¡ng thÃ¡i auth Ä‘Ã£ load xong chÆ°a
   const { user, isHydrated } = useAuth();
 
+  // State má»Ÿ/Ä‘Ã³ng modal update cÃ¢n náº·ng
   const [showWeightModal, setShowWeightModal] = useState(false);
+
+  // State lÆ°u input cÃ¢n náº·ng user nháº­p
   const [weightInput, setWeightInput] = useState("");
+
+  // State chá»©a toÃ n bá»™ dá»¯ liá»‡u dashboard home
+  // Bao gá»“m calories, macro, nÆ°á»›c, challenge, insight...
   const [dashboardData, setDashboardData] = useState<HomeDashboardData | null>(
     null,
   );
+
+  // State chá»©a danh sÃ¡ch nhiá»‡m vá»¥ trong ngÃ y
   const [missions, setMissions] = useState<MissionItem[]>([]);
+
+  // State streak hiá»‡n táº¡i (sá»‘ ngÃ y liÃªn tá»¥c)
   const [streak, setStreak] = useState<StreakData | null>(null);
+
+  // State hoáº¡t Ä‘á»™ng báº¡n bÃ¨
   const [friendsActivity, setFriendsActivity] =
     useState<FriendsActivityData | null>(null);
+
+  // State sá»‘ thÃ´ng bÃ¡o chÆ°a Ä‘á»c
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
 
+  // Táº¡o tÃªn hiá»ƒn thá»‹:
+  // Æ°u tiÃªn display_name
+  // náº¿u chÆ°a cÃ³ thÃ¬ láº¥y pháº§n trÆ°á»›c @ trong email
+  // náº¿u váº«n khÃ´ng cÃ³ thÃ¬ fallback "there"
   const displayName = useMemo(() => {
     const rawName = user?.display_name || user?.email?.split("@")[0] || "there";
 
     return rawName.trim() || "there";
   }, [user?.display_name, user?.email]);
 
+  // TÃ­nh % calories Ä‘Ã£ Äƒn so vá»›i target
+  // dÃ¹ng cho vÃ²ng trÃ²n progress
   const calorieProgress = dashboardData
     ? Math.min(dashboardData.calories.logged / dashboardData.calories.target, 1)
     : 0;
 
+  // Kiá»ƒm tra hÃ´m nay cÃ³ Ä‘ang "Ä‘Ãºng plan" khÃ´ng
+  // true náº¿u calories > 0 vÃ  chÆ°a vÆ°á»£t target
   const onTrack = dashboardData
     ? dashboardData.calories.logged > 0 &&
       dashboardData.calories.logged <= dashboardData.calories.target
     : true;
 
+  // Ref chá»‘ng viá»‡c gá»i API nhiá»u láº§n cÃ¹ng lÃºc
+  // náº¿u Ä‘ang fetch rá»“i thÃ¬ khÃ´ng fetch tiáº¿p
   const isFetchingRef = useRef(false);
+
+  // Ref kiá»ƒm tra component cÃ²n mounted khÃ´ng
+  // trÃ¡nh setState khi component Ä‘Ã£ unmount
   const mountedRef = useRef(true);
 
+  // useFocusEffect cháº¡y má»—i khi screen Home Ä‘Æ°á»£c focus
+  // vÃ­ dá»¥:
+  // - vá»«a login xong
+  // - tá»« mÃ n log meal quay vá»
+  // - tá»« mÃ n water quay vá»
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
+
+      // ÄÃ¡nh dáº¥u component Ä‘ang active
       mountedRef.current = true;
 
       async function loadDashboard() {
+        // Náº¿u Ä‘ang fetch thÃ¬ dá»«ng
+        // trÃ¡nh duplicate request
         if (isFetchingRef.current) return;
+
+        // ÄÃ¡nh dáº¥u báº¯t Ä‘áº§u fetch
         isFetchingRef.current = true;
 
-        // Auth readiness gate — block fetches until auth is fully hydrated
+        // Cháº·n fetch náº¿u auth chÆ°a sáºµn sÃ ng
+        // vÃ­ dá»¥ token chÆ°a restore xong
         if (!isHydrated || !user?.id) {
-          console.warn("[HomeScreen] loadDashboard skipped — auth not ready");
+          console.warn("[HomeScreen] loadDashboard skipped â€” auth not ready");
+
+          // Reset láº¡i lock Ä‘á»ƒ láº§n sau cÃ²n fetch Ä‘Æ°á»£c
           isFetchingRef.current = false;
           return;
         }
 
-        // Mounted guard
+        // Náº¿u component Ä‘Ã£ unmount thÃ¬ khÃ´ng cháº¡y tiáº¿p
         if (!mountedRef.current) return;
 
         try {
-          // Step 1: GET /profile
-          // Home screen NEVER redirects on 404.
-          // AuthContext is the ONLY component allowed to route based on onboarding.
-          // On 404: show loading state, retry once after 500ms, then render with empty data.
+          // ===== BÆ¯á»šC 1: Láº¥y profile =====
           let profile: ProfileResponse | null = null;
           let profileError: any = null;
 
+          // Retry tá»‘i Ä‘a 2 láº§n náº¿u bá»‹ lá»—i 404 táº¡m thá»i
           for (let attempt = 0; attempt < 2; attempt++) {
             try {
               profile = await getMyProfile({
                 file: "home.tsx",
                 route: "HomeScreen",
               });
+
+              // ThÃ nh cÃ´ng thÃ¬ reset lá»—i
               profileError = null;
               break;
             } catch (err: any) {
               profileError = err;
+
+              // Náº¿u láº§n Ä‘áº§u bá»‹ 404 thÃ¬ chá» 500ms rá»“i thá»­ láº¡i
               if (err?.status === 404 && attempt === 0) {
-                // Retry once after 500ms for transient 404
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 continue;
               }
+
               break;
             }
           }
 
+          // Náº¿u váº«n lá»—i sau retry
           if (profileError) {
             console.warn("[HomeScreen] Profile fetch failed:", profileError);
-            // Do NOT redirect. Render with empty profile data.
+
+            // Táº¡o profile giáº£ Ä‘á»ƒ app khÃ´ng crash
+            // chá»‰ dÃ¹ng fallback render UI
             profile = {
               user_id: 0,
               display_name: "",
@@ -337,133 +385,189 @@ export default function HomeScreen() {
             };
           }
 
-          // At this point profile is guaranteed non-null
+          // Sau bÆ°á»›c nÃ y profile cháº¯c cháº¯n luÃ´n tá»“n táº¡i
+          // vÃ¬ hoáº·c fetch thÃ nh cÃ´ng, hoáº·c fallback data máº·c Ä‘á»‹nh
           const safeProfile = profile!;
 
+          // Kiá»ƒm tra component cÃ²n active khÃ´ng
+          // náº¿u user Ä‘Ã£ rá»i mÃ n thÃ¬ khÃ´ng cháº¡y tiáº¿p
           if (!isActive) return;
 
-          if (!isActive) return;
+          // Fetch dá»¯ liá»‡u dashboard theo thá»© tá»± tuáº§n tá»± (sequential)
+          // LÃ½ do:
+          // - TrÃ¡nh race condition giá»¯a cÃ¡c API phá»¥ thuá»™c onboarding/profile
+          // - Náº¿u profile chÆ°a sáºµn sÃ ng thÃ¬ cÃ¡c API sau cÃ³ thá»ƒ fail (403/404)
 
-          // Sequential fetch order (Rule C):
-          // Step 1: profile (already done above)
-          // Step 2: health summary
-          // Step 3: meals
-          // Step 4: water
-          // Step 5: ai advice
-          // Step 6: challenges
-          const today = getTodayKey();
+          const today = getTodayKey(); // Láº¥y ngÃ y hiá»‡n táº¡i theo local timezone (yyyy-mm-dd)
 
-          // Step 2: health summary
+          // ===== STEP 2: HEALTH SUMMARY =====
+          // Láº¥y dá»¯ liá»‡u sá»©c khá»e tá»•ng quan:
+          // BMI, BMR, TDEE, macro target, water target, latest weight...
           const health = await getHealthSummary();
 
+          // Náº¿u user Ä‘Ã£ rá»i mÃ n hÃ¬nh trong lÃºc chá» API tráº£ vá» thÃ¬ dá»«ng luÃ´n
           if (!isActive) return;
 
-          // Step 3: meals
-          const meals = await getDailyMeals(today);
+          // ===== STEP 3: DAILY MEALS =====
+          // Láº¥y toÃ n bá»™ meal log cá»§a hÃ´m nay
+          // DÃ¹ng Ä‘á»ƒ tÃ­nh calories + macro Ä‘Ã£ Äƒn
+          console.log("[HomeScreen] today =", today);
+          const numericUserId = user?.id ? Number(user.id) : undefined;
+          const meals = await getDailyMeals(today, numericUserId);
+
+          // Debug dá»¯ liá»‡u meals Ä‘á»ƒ kiá»ƒm tra backend tráº£ Ä‘Ãºng chÆ°a
           console.log(
             "[HomeScreen] mealsData =",
             JSON.stringify(meals, null, 2),
           );
 
+          // Náº¿u unmount thÃ¬ dá»«ng
           if (!isActive) return;
 
-          // Step 4: water
+          // ===== STEP 4: WATER TRACKING =====
+          // Láº¥y dá»¯ liá»‡u lÆ°á»£ng nÆ°á»›c uá»‘ng trong ngÃ y
+          // Náº¿u backend chÆ°a cÃ³ target thÃ¬ fallback theo profile
           const water = await getDailyWater(
             today,
             safeProfile.water_target_ml ?? 2000,
+            numericUserId,
           );
 
           if (!isActive) return;
 
-          // Step 5: ai advice
-          // Rule D: 403 ONBOARDING_REQUIRED -> log warning only, do NOT redirect
+          // ===== STEP 5: AI ADVICE =====
+          // Gá»i AI Ä‘á»ƒ láº¥y gá»£i Ã½ dinh dÆ°á»¡ng
+          // Náº¿u backend tráº£ 403 (chÆ°a onboarding) thÃ¬ chá»‰ warning, khÃ´ng redirect
           const ai = await getAiAdvice();
 
           if (!isActive) return;
 
-          // Step 6: challenges
-          // Rule D: 403 ONBOARDING_REQUIRED -> log warning only, do NOT redirect
-          const challengesRaw = await getChallenges();
-          const challengesList = mapChallenges(challengesRaw);
-          const challenge =
-            challengesList.length > 0 ? challengesList[0] : null;
+          // ===== STEP 6: CHALLENGES =====
+          // Láº¥y danh sÃ¡ch challenge user Ä‘Ã£ tham gia
+          const myChallenges = await getMyChallenges();
+
+          // Láº¥y challenge Ä‘áº§u tiÃªn Ä‘á»ƒ hiá»ƒn thá»‹ trÃªn Home
+          const challenge = myChallenges.length > 0 ? myChallenges[0] : null;
 
           if (!isActive) return;
 
-          // Step 7: missions
-          const missionsData = await getTodayMissions();
+          // ===== STEP 7: DAILY MISSIONS =====
+          // Láº¥y nhiá»‡m vá»¥ háº±ng ngÃ y
+          // Náº¿u API chÆ°a tá»“n táº¡i thÃ¬ service fallback data cá»©ng
+          //
+          // Truyá»n meals/water/health tá»« cÃ¡c STEP trÃªn vÃ o
+          //    Ä‘á»ƒ mission service KHÃ”NG fetch láº¡i API.
+          //    TrÆ°á»›c Ä‘Ã¢y getTodayMissions() tá»± fetch láº¡i,
+          //    gÃ¢y duplicate /meals request â†' log 500 warning.
+          // =======================================================
+          const missionsData = await getTodayMissions(meals, water, health);
+
+          // Cáº­p nháº­t state mission
           setMissions(missionsData);
 
           if (!isActive) return;
 
-          // Step 8: streak
+          // ===== STEP 8: STREAK =====
+          // Láº¥y chuá»—i ngÃ y giá»¯ thÃ³i quen
           const streakData = await getStreak();
+
+          // Cáº­p nháº­t streak UI
           setStreak(streakData);
 
           if (!isActive) return;
 
-          // Step 9: friends activity
+          // ===== STEP 9: FRIENDS ACTIVITY =====
+          // Láº¥y hoáº¡t Ä‘á»™ng báº¡n bÃ¨ Ä‘á»ƒ hiá»ƒn thá»‹ motivation
           const friendsData = await getFriendsActivity();
+
+          // Cáº­p nháº­t state
           setFriendsActivity(friendsData);
 
           if (!isActive) return;
 
-          // Step 10: notifications unread count
+          // ===== STEP 10: NOTIFICATION =====
+          // Láº¥y sá»‘ notification chÆ°a Ä‘á»c
           const unreadCount = await getUnreadNotifications();
+
+          // Update badge chuÃ´ng
           setUnreadNotifications(unreadCount);
 
           if (!isActive) return;
 
-          // Target values setup
+          // ===== TARGET SETUP =====
+          // Æ¯u tiÃªn dá»¯ liá»‡u tá»« health API,
+          // náº¿u thiáº¿u thÃ¬ fallback profile,
+          // náº¿u váº«n thiáº¿u thÃ¬ fallback máº·c Ä‘á»‹nh
           const calorie_target =
             health?.calorie_target ?? safeProfile.calorie_target ?? 2000;
+
           const protein_target =
             health?.protein_target_g ?? safeProfile.protein_target_g ?? 120;
+
           const carb_target =
             health?.carb_target_g ?? safeProfile.carb_target_g ?? 250;
+
           const fat_target =
             health?.fat_target_g ?? safeProfile.fat_target_g ?? 65;
+
           const water_target =
             safeProfile.water_target_ml ?? health?.water_target_ml ?? 2000;
 
-          // Latest weight parsing
+          // ===== WEIGHT DATA PARSING =====
+          // Xá»­ lÃ½ latest weight Ä‘á»ƒ hiá»ƒn thá»‹ "updated x days ago"
           let weightData = null;
           const latestWeightObj = health?.latest_weight;
+
           if (latestWeightObj) {
             let daysAgo = 0;
+
+            // Náº¿u backend tráº£ sáºµn days_ago thÃ¬ dÃ¹ng luÃ´n
             if (latestWeightObj.days_ago !== undefined) {
               daysAgo = latestWeightObj.days_ago;
-            } else if (latestWeightObj.logged_at) {
+            }
+
+            // Náº¿u khÃ´ng cÃ³ thÃ¬ tá»± tÃ­nh tá»« logged_at
+            else if (latestWeightObj.logged_at) {
               const todayObj = new Date(new Date().toLocaleDateString("en-CA"));
               const weightDateObj = new Date(latestWeightObj.logged_at);
+
               const diffTime = todayObj.getTime() - weightDateObj.getTime();
+
               const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
               daysAgo = diffDays < 0 ? 0 : diffDays;
             }
+
+            // Chuáº©n hÃ³a dá»¯ liá»‡u weight
             weightData = {
               latest_kg: latestWeightObj.weight_kg,
               days_ago: daysAgo,
             };
           }
 
-          // State mapping
+          // ===== MAP DASHBOARD STATE =====
+          // Gom toÃ n bá»™ data Ä‘á»ƒ render UI Home
           const mappedData: HomeDashboardData = {
             calories: {
               logged: meals.daily_totals.calories ?? 0,
               target: calorie_target,
             },
+
             protein: {
               logged: meals.daily_totals.protein_g ?? 0,
               target: protein_target,
             },
+
             carbs: {
               logged: meals.daily_totals.carb_g ?? 0,
               target: carb_target,
             },
+
             fat: {
               logged: meals.daily_totals.fat_g ?? 0,
               target: fat_target,
             },
+
             water: {
               logged:
                 (water.total_ml !== undefined
@@ -471,11 +575,16 @@ export default function HomeScreen() {
                   : water.daily_total_ml) ?? 0,
               target: water_target,
             },
+
             weight: weightData,
+
+            // Náº¿u AI cÃ³ message thÃ¬ Æ°u tiÃªn message, khÃ´ng thÃ¬ advice
             insight: ai ? ai.message || ai.advice : null,
+
             challenge,
           };
 
+          // Cáº­p nháº­t toÃ n bá»™ dashboard UI
           setDashboardData(mappedData);
         } catch (error) {
           console.warn("[HomeScreen] Failed to load dashboard data:", error);
@@ -505,7 +614,7 @@ export default function HomeScreen() {
           <View>
             <Text style={styles.hello}>Hello,</Text>
             <Text style={styles.name}>{displayName} 👋</Text>
-            <Text style={styles.sub}>Let’s make today amazing</Text>
+            <Text style={styles.sub}>Let's make today amazing</Text>
           </View>
 
           <TouchableOpacity style={styles.bellBtn}>
@@ -597,8 +706,8 @@ export default function HomeScreen() {
               {(dashboardData?.calories.logged || 0) <= 0
                 ? "🍽️ Log your first meal to start tracking"
                 : onTrack
-                  ? "💚 You’re on track! Keep it up"
-                  : "🔥 You’re over today’s calorie goal"}
+                  ? "💚 You're on track! Keep it up"
+                  : "🔥 You're over today's calorie goal"}
             </Text>
           </View>
         </View>
@@ -618,47 +727,28 @@ export default function HomeScreen() {
             <Text style={styles.progressText}>
               {missions.length > 0
                 ? `${missions.filter((m) => m.done).length}/${missions.length}`
-                : "2/4"}
+                : "0/0"}
             </Text>
           </View>
 
-          {missions.length > 0
-            ? missions.map((mission, index) => (
-                <Mission key={index} text={mission.text} done={mission.done} />
-              ))
-            : [
-                <Mission
-                  key="fallback-1"
-                  text="Drink 8 glasses of water"
-                  done
-                />,
-                <Mission key="fallback-2" text="Eat 40g protein" />,
-                <Mission key="fallback-3" text="Complete 3 meals" />,
-                <Mission key="fallback-4" text="Keep under 1800 kcal" done />,
-              ]}
+          {missions.map((mission, index) => (
+            <Mission key={index} text={mission.text} done={mission.done} />
+          ))}
         </View>
 
         {/* STREAK */}
         <View style={styles.streakCard}>
           <Text style={styles.streakLabel}>Daily Streak</Text>
-          <Text style={styles.streakTitle}>🔥 {streak?.current ?? 6} Days</Text>
+          <Text style={styles.streakTitle}>🔥 {streak?.current ?? 0} Days</Text>
           <Text style={styles.streakSub}>
             {streak
-              ? `You’ve stayed consistent for ${streak.current} days`
-              : "You’ve stayed consistent for 6 days"}
+              ? `You've stayed consistent for ${streak.current} days`
+              : "Start logging to build your streak"}
           </Text>
 
           <View style={styles.streakBar}>
             {(
-              streak?.weeklyProgress ?? [
-                true,
-                true,
-                true,
-                true,
-                true,
-                true,
-                false,
-              ]
+              streak?.weeklyProgress ?? []
             ).map((done, i) => (
               <View
                 key={i}
@@ -749,13 +839,12 @@ export default function HomeScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.friendLabel}>Friends Motivation</Text>
               <Text style={styles.friendTitle}>
-                {friendsActivity
+                {friendsActivity?.activeCount != null
                   ? `${friendsActivity.activeCount} friends active 💪`
-                  : "4 friends active 💪"}
+                  : "No friends yet"}
               </Text>
               <Text style={styles.friendSub}>
-                {friendsActivity?.latestActivity ||
-                  "Linh completed hydration • Minh hit protein target"}
+                {friendsActivity?.latestActivity || "No friends yet"}
               </Text>
             </View>
 
@@ -773,14 +862,14 @@ export default function HomeScreen() {
           <View style={styles.challengeCard}>
             <Text style={styles.challengeLabel}>Active Challenge</Text>
             <Text style={styles.challengeTitle}>
-              {dashboardData?.challenge?.name || "Hydration Hero 💧"}
+              {dashboardData?.challenge?.name || "No active challenge"}
             </Text>
             <Text style={styles.challengeSub}>
               {dashboardData?.challenge?.my_enrollment
                 ? `${dashboardData.challenge.my_enrollment.day_current} / ${dashboardData.challenge.my_enrollment.day_total} days completed`
                 : dashboardData?.challenge
                   ? `${dashboardData.challenge.duration_days} days challenge`
-                  : "5 / 7 days completed"}
+                  : "Join a challenge to get started"}
             </Text>
 
             <View style={styles.challengeProgress}>
@@ -795,7 +884,7 @@ export default function HomeScreen() {
                             100,
                           100,
                         )}%`
-                      : "72%",
+                      : "0%",
                   },
                 ]}
               />
@@ -810,12 +899,12 @@ export default function HomeScreen() {
           <Text style={styles.insightTitle}>
             {dashboardData?.insight
               ? "AI Recommendation"
-              : "You are low on protein today"}
+              : "No insights yet"}
           </Text>
 
           <Text style={styles.insightSub}>
             {dashboardData?.insight ||
-              "Try chicken breast, yogurt, or eggs for dinner."}
+              "Check back after logging more meals"}
           </Text>
 
           <TouchableOpacity
@@ -875,9 +964,9 @@ function Macro({ label, value, color }: any) {
 function Mission({ text, done = false }: any) {
   return (
     <View style={styles.missionItem}>
-      <Text style={{ color: done ? "#10B981" : "#CBD5E1" }}>
-        {done ? "✓" : "○"}
-      </Text>
+      {done
+        ? <CheckCircle size={20} color="#10B981" />
+        : <Circle size={20} color="#CBD5E1" />}
       <Text style={styles.missionText}>{text}</Text>
     </View>
   );
@@ -1397,3 +1486,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+

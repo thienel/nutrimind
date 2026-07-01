@@ -24,8 +24,8 @@ let profileCheckPromise: Promise<void> | null = null;
 initGoogleSignIn();
 
 function AppWithProviders() {
-  // lấy thông tin user hiện tại từ AuthContext
-  const { user } = useAuth();
+  // lấy thông tin user hiện tại và trạng thái hydration từ AuthContext
+  const { user, isHydrated } = useAuth();
 
   // lấy route hiện tại (expo-router)
   const segments = useSegments();
@@ -42,19 +42,9 @@ function AppWithProviders() {
     // Rule G: Chỉ chạy 1 instance tại một thời điểm
     // =======================================================
     const checkProfile = async () => {
-      // nếu chưa login thì không cần check
-      if (!user) return;
+      if (!isHydrated || !user) return;
 
-      // =======================================================
       // Các route được phép vào dù chưa setup profile
-      // Ví dụ:
-      // - auth
-      // - welcome setup
-      // - personal info
-      // - health profile
-      // - profile
-      // - index
-      // =======================================================
       const safeRoutes = [
         "personal-information",
         "welcome-setup",
@@ -149,10 +139,11 @@ function AppWithProviders() {
     };
 
     // chạy check mỗi khi:
+    // - isHydrated thay đổi (tránh chạy trước khi auth sẵn sàng)
     // - user thay đổi
     // - route thay đổi
     checkProfile();
-  }, [user, pathString, segments]);
+  }, [isHydrated, user, pathString, segments]);
 
   return (
     // =======================================================

@@ -148,10 +148,16 @@ export async function request<T = unknown>(
   }
 
   // ── Parse response ────────────────────────────────────────────────────────
-  let json: { success?: boolean; data?: T; message?: string } & Record<
-    string,
-    unknown
-  >;
+  //
+  // Backend trả response theo format chuẩn:
+  //   { is_success: boolean, data: any, error?: { code?: string, message?: string } }
+  //
+  // Luôn check is_success TRƯỚC khi lấy data.
+  //    - is_success === true  → unwrap json.data và trả về
+  //    - is_success === false → throw error từ json.error
+  //    - Trường hợp không có is_success (endpoint cũ) → fallback json.data ?? json
+  //
+  let json: Record<string, unknown>;
 
   try {
     json = await res.json();
@@ -160,18 +166,50 @@ export async function request<T = unknown>(
   }
 
   if (!res.ok) {
-    const errObj = json.error as
-      | { code?: string; message?: string }
-      | undefined;
+    // Backend gửi lỗi trong: response.error.message
+    const errPayload = (
+      json?.error !== undefined ? (json.error as Record<string, unknown>) : null
+    ) as { code?: string; message?: string } | null;
     throw {
       status: res.status,
-      code: errObj?.code ?? (json.code as string),
-      message: errObj?.message ?? json.message ?? "Đã có lỗi xảy ra",
+      code: errPayload?.code ?? (json.code as string),
+      message:
+        errPayload?.message ??
+        (json.message as string) ??
+        res.statusText ??
+        "Đã có lỗi xảy ra",
     } as ApiError;
   }
 
-  // Backend trả { success, data, message } — trả về data hoặc toàn bộ json
-  return (json.data ?? json) as T;
+  // ── (B) Application-level error (HTTP 200 nhưng backend từ chối) ──────────
+  // Trường hợp này hay gặp khi backend validate business logic:
+  //   HTTP 200, { is_success: false, error: { message: "...", code: "..." } }
+  // Frontend cũ không bắt được → tưởng thành công.
+  if (json?.is_success === false) {
+    const errPayload = (
+      json?.error !== undefined ? (json.error as Record<string, unknown>) : null
+    ) as { code?: string; message?: string } | null;
+    throw {
+      status: res.status, // vẫn giữ status (200) để service có thể log
+      code: errPayload?.code,
+      message:
+        errPayload?.message ??
+        (json.message as string) ??
+        "Yêu cầu không thành công",
+    } as ApiError;
+  }
+
+  // ── (C) Success — unwrap data ─────────────────────────────────────────────
+  // Backend trả: { is_success: true, data: { ... } }
+  // Ta unwrap data để service không cần làm việc này.
+  if (json?.is_success === true) {
+    return json.data as T;
+  }
+
+  // ── (D) Fallback — endpoint không dùng is_success wrapper ─────────────────
+  // Một số endpoint cũ hoặc không theo chuẩn có thể trả thẳng object.
+  // Giữ logic cũ để không phá vỡ những endpoint này.
+  return (json?.data ?? json) as T;
 }
 
 // ─── Convenience methods ──────────────────────────────────────────────────────

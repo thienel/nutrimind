@@ -1,5 +1,15 @@
 import { api } from "@/lib/apiClient";
 
+// Cache in-memory với TTL: tránh duplicate GET /profile
+// và chống transient 404 từ backend.
+//
+// Khi backend trả về 404 nhưng cache cũ có onboarding_done=true,
+// ta giữ cache cũ và log warning — không cho phép 404 transient
+// phá vỡ trạng thái đã onboarded của user.
+let profileCachedData: ProfileResponse | null = null;
+let profileCachedAt = 0;
+const PROFILE_CACHE_TTL_MS = 30_000; // 30 giây
+
 // Single-flight: đảm bảo chỉ 1 GET /profile request chạy tại một thời điểm
 // Các caller khác sẽ await promise này thay vì gọi API lại
 let profileFetchPromise: Promise<ProfileResponse> | null = null;
@@ -114,6 +124,24 @@ export async function completeOnboarding(
 // - Personal Information screen
 // - App layout check setup
 // =======================================================
+/**
+ * Kiểm tra cache xem onboarding_done = true không.
+ * Không gọi API — chỉ đọc cache in-memory.
+ * Dùng trong các service (challenge, social) để quyết định
+ * có bỏ qua ONBOARDING_REQUIRED error từ backend hay không.
+ */
+export function isOnboardedFromCache(): boolean {
+  return profileCachedData?.onboarding_done === true;
+}
+
+/** Xoá cache — gọi khi user sign out để tránh dùng data cũ */
+export function clearProfileCache(): void {
+  profileCachedData = null;
+  profileCachedAt = 0;
+  profileFetchPromise = null;
+  profileCallerTrace = null;
+}
+
 export async function getMyProfile(options?: {
   file?: string;
   route?: string;
@@ -124,6 +152,15 @@ export async function getMyProfile(options?: {
   // Trace caller for debugging
   console.log(`[ProfileCaller] file=${callerFile} route=${callerRoute}`);
 
+  // Cache hit: nếu profile đã fetch trong vòng PROFILE_CACHE_TTL_MS thì dùng lại
+  const now = Date.now();
+  if (profileCachedData && now - profileCachedAt < PROFILE_CACHE_TTL_MS) {
+    console.log(
+      `[ProfileCaller] Cache HIT (${Math.round((now - profileCachedAt) / 1000)}s old) for ${callerFile}:${callerRoute}`,
+    );
+    return profileCachedData;
+  }
+
   // Nếu đang có request đang chạy -> reuse
   if (profileFetchPromise) {
     console.log(
@@ -133,20 +170,43 @@ export async function getMyProfile(options?: {
   }
 
   // Tạo request mới
-  profileFetchPromise = api
-    .get<ProfileResponse>("/profile")
-    .then((profile) => {
-      // Log success with user_id for mismatch detection
-      console.log(
-        `[ProfileCompare] authUserId=${profile.user_id} onboarding_done=${profile.onboarding_done}`,
-      );
-      return profile;
-    })
-    .finally(() => {
-      // Reset sau khi xong (thành công hoặc lỗi)
-      profileFetchPromise = null;
-      profileCallerTrace = null;
-    });
+  let rejectPromise: (reason: any) => void;
+  profileFetchPromise = new Promise<ProfileResponse>((resolve, reject) => {
+    rejectPromise = reject;
+
+    api
+      .get<ProfileResponse>("/profile")
+      .then((profile) => {
+        // Thành công: ghi cache và trả về
+        profileCachedData = profile;
+        profileCachedAt = Date.now();
+        console.log(
+          `[ProfileCache] FETCH_OK authUserId=${profile.user_id} onboarding_done=${profile.onboarding_done}`,
+        );
+        resolve(profile);
+      })
+      .catch((err: any) => {
+        if (err?.status === 404 && profileCachedData?.onboarding_done === true) {
+          // Backend transient 404 nhưng cache vẫn có onboarding_done=true
+          // → giữ cache cũ, không cho phép 404 transient phá onboarding state
+          console.warn(
+            `[ProfileCache] 404 ignored — using cached profile (${Math.round((Date.now() - profileCachedAt) / 1000)}s old) for ${callerFile}:${callerRoute}`,
+          );
+          resolve(profileCachedData);
+          return;
+        }
+
+        // Các lỗi khác (5xx, network, 404 không có cache) → reject
+        console.warn(
+          `[ProfileCache] FETCH_FAIL from ${callerFile}:${callerRoute} — status=${err?.status}`,
+        );
+        reject(err);
+      })
+      .finally(() => {
+        profileFetchPromise = null;
+        profileCallerTrace = null;
+      });
+  });
 
   // Store caller info for debugging
   profileCallerTrace = { file: callerFile, route: callerRoute };

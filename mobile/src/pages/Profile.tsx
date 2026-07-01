@@ -25,7 +25,6 @@ import {
 
 import { useOfflineProfile } from "@/hooks/useOfflineProfile";
 import { useAuth } from "@/context/AuthContext";
-import { api } from "@/lib/apiClient";
 
 // =======================================================
 // Danh sách màu avatar random
@@ -45,29 +44,36 @@ export function Profile() {
   const mountedRef = useRef(true);
 
   // =======================================================
-  // Mỗi lần focus lại màn Profile
-  // -> refresh lại dữ liệu mới nhất
+  // useFocusEffect:
+  // Mỗi lần user quay lại màn Profile (focus lại)
+  // sẽ tự động fetch lại profile mới nhất
   //
-  // Dùng để:
-  // - update goal ngay sau khi save Personal Information
-  // - update weight mới
-  // - update profile mới nhất mà không cần reload app
+  // Mục đích:
+  // - cập nhật goal sau khi edit Personal Information
+  // - cập nhật weight mới sau khi log weight
+  // - sync profile mới nhất từ server
+  // - tránh phải reload app thủ công
   // =======================================================
   useFocusEffect(
     useCallback(() => {
+      // Đánh dấu component đang active
       mountedRef.current = true;
 
-      // Auth readiness gate — block fetches until auth is fully hydrated
+      // Auth gate:
+      // Chỉ cho phép fetch khi auth đã hydrate xong
+      // và user đã tồn tại
       if (!isHydrated || !user?.id) {
         console.warn("[Profile] refresh skipped — auth not ready");
         return;
       }
 
-      // Mounted guard
+      // Nếu component đã unmount thì dừng luôn
       if (!mountedRef.current) return;
 
+      // Gọi refresh profile mới nhất từ server
       refresh();
 
+      // Cleanup khi user rời màn Profile
       return () => {
         mountedRef.current = false;
       };
@@ -75,9 +81,12 @@ export function Profile() {
   );
 
   // =======================================================
-  // Dữ liệu hiển thị
-  // Ưu tiên profile cache/server
-  // fallback sang auth user nếu chưa có
+  // Dữ liệu hiển thị trên UI Profile
+  //
+  // Ưu tiên:
+  // 1. profile state (data mới từ server)
+  // 2. fallback auth user (data login cache)
+  // 3. fallback text mặc định nếu thiếu
   // =======================================================
   const displayProfile = {
     fullName: profile?.fullName || user?.display_name || "—",
@@ -90,13 +99,22 @@ export function Profile() {
   };
 
   // =======================================================
-  // Tạo màu avatar cố định dựa vào user id
-  // cùng user sẽ luôn ra cùng màu
+  // Tạo màu avatar dựa trên user id
+  //
+  // Mục đích:
+  // - cùng 1 user luôn có cùng màu
+  // - tránh random mỗi lần render
   // =======================================================
   const avatarColor = avatarColors[(user?.id ?? 0) % avatarColors.length];
 
   // =======================================================
-  // Convert goal enum từ backend thành text dễ đọc
+  // Convert goal enum từ backend thành text dễ đọc cho UI
+  //
+  // Backend:
+  // LOSE_WEIGHT / GAIN_MUSCLE / MAINTAIN / EAT_HEALTHIER
+  //
+  // UI:
+  // câu mô tả thân thiện hơn
   // =======================================================
   const getGoalText = () => {
     const goalMap: Record<string, string> = {
@@ -106,6 +124,7 @@ export function Profile() {
       EAT_HEALTHIER: "Improve eating habits",
     };
 
+    // Nếu backend trả goal lạ thì fallback
     return goalMap[displayProfile.goal] || "Stay healthy";
   };
 
