@@ -19,6 +19,7 @@ import {
   updateProfile,
   completeOnboarding,
 } from "@/services/profileService";
+import { useAuth } from "@/context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function PersonalInformation() {
@@ -29,6 +30,7 @@ export function PersonalInformation() {
   const [age, setAge] = useState("");
   const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
+  const { isHydrated, user } = useAuth();
 
   const [gender, setGender] = useState<"MALE" | "FEMALE">("MALE");
 
@@ -40,19 +42,15 @@ export function PersonalInformation() {
     "SEDENTARY" | "LIGHTLY_ACTIVE" | "MODERATELY_ACTIVE" | "VERY_ACTIVE"
   >("MODERATELY_ACTIVE");
 
-  // Khi màn hình mở lần đầu:
-  // - nếu user đã có profile -> load dữ liệu cũ lên form
-  // - nếu chưa có -> giữ form trống để nhập mới
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
   // Hàm gọi API lấy profile hiện tại từ backend
   // Nếu user đã setup trước đó thì fill dữ liệu vào form
   // Nếu chưa setup thì backend trả 404
   const loadProfile = async () => {
     try {
-      const profile = await getMyProfile();
+      const profile = await getMyProfile({
+        file: "PersonalInformation.tsx",
+        route: "loadProfile",
+      });
 
       // nếu user đã setup trước đó -> fill dữ liệu cũ
       setAge(String(profile.age));
@@ -72,6 +70,25 @@ export function PersonalInformation() {
       console.log("LOAD PROFILE ERROR:", error);
     }
   };
+
+  // Khi màn hình mở lần đầu:
+  // - nếu user đã có profile -> load dữ liệu cũ lên form
+  // - nếu chưa có -> giữ form trống để nhập mới
+  useEffect(() => {
+    // Auth readiness gate — block fetches until auth is fully hydrated
+    if (!isHydrated || !user?.id) {
+      console.warn(
+        "[PersonalInformation] loadProfile skipped — auth not ready",
+      );
+      return;
+    }
+
+    // Wrap async call to avoid ESLint cascading renders warning
+    const load = async () => {
+      await loadProfile();
+    };
+    load();
+  }, [isHydrated, user?.id]);
 
   // Kiểm tra dữ liệu trước khi submit:
   // tránh trường hợp user để trống
@@ -161,7 +178,7 @@ export function PersonalInformation() {
             "nutrimind_profile_cache",
             JSON.stringify({
               fullName: "", // fallback to user.display_name
-              email: "",    // fallback to user.email
+              email: "", // fallback to user.email
               age: payload.age.toString(),
               gender: payload.gender,
               height: payload.height_cm.toString(),

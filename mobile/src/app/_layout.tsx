@@ -1,11 +1,11 @@
-import "react-native-gesture-handler";
+/* eslint-disable import/no-duplicates */
 
+import "react-native-gesture-handler";
 import { Suspense, useEffect } from "react";
 import { ActivityIndicator, View, Alert } from "react-native";
 import { Stack, router, useSegments } from "expo-router";
 import { SQLiteProvider } from "expo-sqlite";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/ToastProvider";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -13,7 +13,9 @@ import { NetworkProvider } from "@/context/NetworkContext";
 import { DatabaseManager, DB_NAME } from "../db/database";
 import { initGoogleSignIn } from "@/lib/googleSignIn";
 import { getMyProfile } from "@/services/profileService";
-import { isProfileCompleted } from "@/utils/profile";
+
+// Tránh checkProfile chạy nhiều lần cùng lúc
+let profileCheckPromise: Promise<void> | null = null;
 
 // =======================================================
 // Khởi tạo Google Sign In một lần duy nhất khi app start
@@ -22,8 +24,8 @@ import { isProfileCompleted } from "@/utils/profile";
 initGoogleSignIn();
 
 function AppWithProviders() {
-  // lấy thông tin user hiện tại từ AuthContext
-  const { user } = useAuth();
+  // lấy thông tin user hiện tại và trạng thái hydration từ AuthContext
+  const { user, isHydrated } = useAuth();
 
   // lấy route hiện tại (expo-router)
   const segments = useSegments();
@@ -36,21 +38,13 @@ function AppWithProviders() {
     // Mục tiêu:
     // - chặn user dùng các chức năng chính nếu chưa setup profile
     // - ép user hoàn thiện thông tin cá nhân trước
+    //
+    // Rule G: Chỉ chạy 1 instance tại một thời điểm
     // =======================================================
     const checkProfile = async () => {
-      // nếu chưa login thì không cần check
-      if (!user) return;
+      if (!isHydrated || !user) return;
 
-      // =======================================================
       // Các route được phép vào dù chưa setup profile
-      // Ví dụ:
-      // - auth
-      // - welcome setup
-      // - personal info
-      // - health profile
-      // - profile
-      // - index
-      // =======================================================
       const safeRoutes = [
         "personal-information",
         "welcome-setup",
@@ -62,70 +56,94 @@ function AppWithProviders() {
       ];
 
       // kiểm tra route hiện tại hoặc bất kỳ segment nào (ví dụ trong tabs) có nằm trong safeRoutes không
-      const isSafeRoute = segments.some((segment) => safeRoutes.includes(segment));
+      const isSafeRoute = segments.some((segment) =>
+        safeRoutes.includes(segment),
+      );
 
       // nếu đang ở route an toàn -> bỏ qua check
       if (isSafeRoute) return;
 
+      // Rule G: Nếu đang có request checkProfile đang chạy -> không chạy lại
+      if (profileCheckPromise) return;
+
       try {
-        // gọi API lấy profile từ backend
-        const profile = await getMyProfile();
+        // Rule G: Lưu promise để các lần gọi sau biết và không chạy lại
+        profileCheckPromise = (async () => {
+          try {
+            // gọi API lấy profile từ backend
+            const profile = await getMyProfile({
+              file: "_layout.tsx",
+              route: "checkProfile",
+            });
 
-        // kiểm tra profile đã đầy đủ chưa
-        const completed = isProfileCompleted(profile);
+            // [ProfileCheck] backend onboarding_done=
+            console.log(
+              `[ProfileCheck] backend onboarding_done=${profile.onboarding_done}`,
+            );
 
-        // nếu chưa hoàn thành setup
-        if (!completed) {
-          Alert.alert(
-            "Setup Required",
-            "Please complete your personal information before using this feature.",
-            [
-              {
-                // user đóng alert nhưng vẫn ở lại màn hiện tại
-                text: "Later",
-                style: "cancel",
-              },
-              {
-                // chuyển user tới màn nhập thông tin
-                text: "Go now",
-                onPress: () => router.replace("/personal-information"),
-              },
-            ],
-          );
-        }
-      } catch (error: any) {
-        // =======================================================
-        // Nếu backend trả 404:
-        // nghĩa là user chưa từng tạo profile
-        // =======================================================
-        if (error?.status === 404) {
-          Alert.alert(
-            "Setup Required",
-            "Please complete your personal information before using this feature.",
-            [
-              {
-                text: "Later",
-                style: "cancel",
-              },
-              {
-                text: "Go now",
-                onPress: () => router.replace("/personal-information"),
-              },
-            ],
-          );
-          return;
-        }
+            // _layout.tsx chỉ đọc profile, KHÔNG redirect.
+            // Redirect chỉ được AuthContext thực hiện.
+            // Hiển thị alert nếu chưa onboarding (non-blocking).
+            if (!profile.onboarding_done) {
+              console.log(
+                "[ProfileCheck] profile incomplete, showing alert (no redirect)",
+              );
+              Alert.alert(
+                "Setup Required",
+                "Please complete your personal information before using this feature.",
+                [
+                  {
+                    text: "Later",
+                    style: "cancel",
+                  },
+                  {
+                    text: "Go now",
+                    onPress: () => router.replace("/personal-information"),
+                  },
+                ],
+              );
+            }
+          } catch (error: any) {
+            // 404: profile chưa tồn tại -> log only, không redirect
+            if (error?.status === 404) {
+              console.log(
+                "[ProfileCheck] 404 from /profile, showing alert (no redirect)",
+              );
+              Alert.alert(
+                "Setup Required",
+                "Please complete your personal information before using this feature.",
+                [
+                  {
+                    text: "Later",
+                    style: "cancel",
+                  },
+                  {
+                    text: "Go now",
+                    onPress: () => router.replace("/personal-information"),
+                  },
+                ],
+              );
+              return;
+            }
 
-        // log các lỗi khác để debug
-        console.log("CHECK PROFILE ERROR:", error);
+            // log các lỗi khác để debug (không redirect)
+            console.log("CHECK PROFILE ERROR:", error);
+          }
+        })();
+
+        await profileCheckPromise;
+      } finally {
+        // Reset promise sau khi xong
+        profileCheckPromise = null;
       }
     };
 
     // chạy check mỗi khi:
+    // - isHydrated thay đổi (tránh chạy trước khi auth sẵn sàng)
     // - user thay đổi
     // - route thay đổi
     checkProfile();
-  }, [user, pathString]);
+  }, [isHydrated, user, pathString, segments]);
 
   return (
     // =======================================================

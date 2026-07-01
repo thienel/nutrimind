@@ -64,6 +64,11 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
 
   const triggerSync = useCallback(async () => {
     if (isSyncingRef.current || !userId) return;
+    // Guard: SQLite db có thể chưa sẵn sàng khi NetworkContext mount
+    if (!db) {
+      console.warn("[NetworkContext] triggerSync skipped — db not ready");
+      return;
+    }
     isSyncingRef.current = true;
     setIsSyncing(true);
     try {
@@ -71,7 +76,7 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
       const result = await syncService.runSync();
       const remaining = await syncService.getPendingCount();
       setPendingSyncCount(remaining);
-      
+
       // Nếu có items được sync thành công
       if (result.synced > 0) {
         setShowSyncSuccess(true);
@@ -104,20 +109,26 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
           triggerSync();
         }
         prevOnline.current = online;
-      }
+      },
     );
 
     // Kích hoạt sync khi app quay lại từ background (Foreground Trigger)
-    const appStateSub = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
-      if (nextAppState === "active") {
-        triggerSync();
-      }
-    });
+    const appStateSub = AppState.addEventListener(
+      "change",
+      (nextAppState: AppStateStatus) => {
+        if (nextAppState === "active") {
+          triggerSync();
+        }
+      },
+    );
 
     // Quét hàng đợi tự động mỗi 15 phút (Background Interval)
-    const intervalId = setInterval(() => {
-      triggerSync();
-    }, 15 * 60 * 1000);
+    const intervalId = setInterval(
+      () => {
+        triggerSync();
+      },
+      15 * 60 * 1000,
+    );
 
     return () => {
       unsub();

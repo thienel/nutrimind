@@ -13,6 +13,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { api, registerForceSignOut } from "@/lib/apiClient";
 import { useSQLiteContext } from "expo-sqlite";
 import { getGoogleIdToken, googleSignOutLocal } from "@/lib/googleSignIn";
+import { getMyProfile } from "@/services/profileService";
 import { pullInitialData } from "@/services/initialData.service";
 import {
   clearTokens,
@@ -23,7 +24,7 @@ import {
 } from "@/lib/tokenStorage";
 import { API_BASE_URL, TOKEN_REFRESH_THRESHOLD_SECONDS } from "@/lib/constants";
 import { clearUserData } from "@/lib/db";
-import { clearProfileCache } from "@/hooks/useOfflineProfile";
+import { clearProfileCache } from "@/services/profileService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,10 @@ interface AuthContextValue {
   user: UserProfile | null;
   /** true trong lúc đang kiểm tra token lúc startup */
   isLoading: boolean;
+  /** true khi auth đã hoàn tất hydration (token + user đã load xong) */
+  isHydrated: boolean;
+  /** Alias for isHydrated — used by screens to gate profile fetches */
+  isInitialized: boolean;
   isAuthenticated: boolean;
 
   /** Đăng nhập bằng email + password (spec §2.4) */
@@ -116,12 +121,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const db = useSQLiteContext();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Track if this is a login flow (vs startup restore)
+  const loginFlowRef = useRef(false);
 
   // Tránh double-run startup check (React 18 StrictMode)
   const startupRan = useRef(false);
 
+  // Tránh concurrent profile checks chạy nhiều lần cùng lúc
+  const profileCheckRef = useRef(false);
+
   // ── AppState listener (spec §11.6: pull data sau 30 phút ở background) ──
-  const lastBackgroundTime = useRef<number>(Date.now());
+  const lastBackgroundTime = useRef<number>(0);
+
+  useEffect(() => {
+    lastBackgroundTime.current = Date.now();
+  }, []);
   const isPullingRef = useRef(false);
 
   useEffect(() => {
@@ -161,29 +177,112 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // ── Navigation sau auth ──────────────────────────────────────────────────
-  const navigateAfterAuth = useCallback(async (isFirstLogin: boolean) => {
-    // Nếu là lần đầu login -> vào onboarding
-    if (isFirstLogin) {
-      router.replace("/welcome-setup");
-      return;
-    }
+  const navigateAfterAuth = useCallback(
+    async (isFirstLogin: boolean) => {
+      // Nếu là lần đầu login -> vào onboarding
+      if (isFirstLogin) {
+        router.replace("/welcome-setup");
+        return;
+      }
 
-    // Không check profile ở đây nữa
-    // để root layout xử lý tập trung
-    router.replace("/(tabs)/home");
-  }, []);
+      // [AuthState] tokenExists=... user.id=... hydrated=...
+      const appToken = await getAppToken().catch(() => null);
+      console.log(
+        `[AuthState] tokenExists=${!!appToken} userId=${user?.id} hydrated=${isHydrated}`,
+      );
+
+      // Rule B: Kiểm tra profile trước khi vào home
+      // để đảm bảo onboarding_done = true
+      // Prevent duplicate concurrent checks
+      if (profileCheckRef.current) return;
+      profileCheckRef.current = true;
+
+      try {
+        const profile = await getMyProfile({
+          file: "AuthContext.tsx",
+          route: "navigateAfterAuth",
+        });
+        console.log(
+          `[ProfileCheck] navigateAfterAuth onboarding_done=${profile.onboarding_done}`,
+        );
+        if (profile.onboarding_done) {
+          router.replace("/(tabs)/home");
+        } else {
+          console.log(
+            "[ProfileCheck] navigateAfterAuth redirecting to welcome-setup",
+          );
+          router.replace("/welcome-setup");
+        }
+      } catch (error: any) {
+        // Rule E: 404 = profile chưa tồn tại -> vào onboarding
+        if (error?.status === 404) {
+          console.log(
+            "[ProfileCheck] navigateAfterAuth 404, redirecting to welcome-setup",
+          );
+          router.replace("/welcome-setup");
+        } else {
+          // Lỗi khác -> vẫn vào home, để home screen xử lý
+          console.warn("[AuthContext] Profile check failed after auth:", error);
+          router.replace("/(tabs)/home");
+        }
+      } finally {
+        profileCheckRef.current = false;
+      }
+    },
+    [user?.id, isHydrated],
+  );
+
+  // ── Effect: tự động navigate sau khi auth hydration hoàn tất ────────────
+  // Chỉ chạy khi có login flow (không chạy khi startup restore)
+  useEffect(() => {
+    if (!isHydrated || !user) return;
+    if (!loginFlowRef.current) return;
+
+    console.log(
+      `[AuthHydration] login flow complete user.id=${user.id} hydrated=${isHydrated}`,
+    );
+
+    // Reset flag và navigate
+    loginFlowRef.current = false;
+    // navigateAfterAuth sẽ được gọi bởi login methods
+  }, [isHydrated, user?.id]);
+
+  // ── Effect: tự động redirect sau startup restore ─────────────────────────
+  //    Luồng:
+  //      checkAuth() → setUser(profile) → setIsHydrated(true)
+  //      → React re-render → effect này chạy
+  //      → navigateAfterAuth(false) → router.replace("/(tabs)/home")
+  //
+  useEffect(() => {
+    if (!isHydrated || !user) return;
+    if (loginFlowRef.current) return;
+
+    console.log(
+      `[AuthHydration] startup restore — navigating with user.id=${user.id}`,
+    );
+
+    // Dùng setTimeout để đảm bảo SplashScreen đã hide xong
+    // Tránh lỗi "Cannot replace screen while splash screen is showing"
+    setTimeout(() => {
+      navigateAfterAuth(false);
+    }, 100);
+  }, [isHydrated, user, navigateAfterAuth]);
 
   // ── Force sign-out (spec §2.9) ────────────────────────────────────────────
+  // FIX: Dùng user?.id thay vì user (object) để tránh
+  // react-hooks/exhaustive-deps warning
+  // Chỉ cần userId của user hiện tại để clear cache
   const forceSignOut = useCallback(async () => {
-    // Xóa token và profile cache
-    const currentUser = user;
+    // Lưu userId trước khi clear
+    const userId = user?.id;
     await clearTokens();
     await clearProfileCache().catch(() => {});
     // Xóa SQLite data nếu biết userId
-    if (currentUser?.id) {
-      await clearUserData(currentUser.id).catch(() => {});
+    if (userId) {
+      await clearUserData(userId).catch(() => {});
     }
     setUser(null);
+    setIsHydrated(false);
     // Spec: hiển thị thông báo phiên hết hạn
     router.replace("/auth");
     setTimeout(() => {
@@ -193,7 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         [{ text: "OK" }],
       );
     }, 500);
-  }, [user]);
+  }, [user?.id]);
 
   // Đăng ký callback cho apiClient để gọi khi refresh thất bại
   useEffect(() => {
@@ -201,41 +300,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [forceSignOut]);
 
   // ── App startup check (spec §2.6) ─────────────────────────────────────────
+  // FIX: Dùng user?.id thay vì user (object) trong deps array
+  // Tránh effect chạy lại mỗi khi user object thay đổi reference
+  // (xảy ra khi setUser được gọi với object mới)
   useEffect(() => {
     if (startupRan.current) return;
     startupRan.current = true;
 
     async function checkAuth() {
+      console.log("[AuthHydration] start");
       try {
         const appToken = await getAppToken();
 
         if (!appToken) {
           // Không có token → về màn đăng nhập
           router.replace("/auth");
+          // Không set isHydrated — để guard các screen không fetch linh tinh
           return;
         }
 
         if (isTokenFresh(appToken)) {
-          // Token còn đủ hạn → pull profile (background, không block UI)
+          // Token còn đủ hạn → lấy user info
           try {
             const profile = await api.get<UserProfile>("/auth/me");
             setUser(profile);
-            // Kiểm tra onboarding & pull initial data
-            try {
-              await pullInitialData(db, profile.id);
-              router.replace("/(tabs)/home");
-            } catch (err: unknown) {
-              const e = err as { status?: number };
-              if (e?.status === 403) {
-                router.replace("/welcome-setup");
-              } else {
-                router.replace("/(tabs)/home");
-              }
-            }
+            // Chỉ set hydrated khi user đã được restore thành công
+            setIsHydrated(true);
           } catch {
-            // Có thể offline → vào home với data local
-            router.replace("/(tabs)/home");
+            // Không thể lấy profile → không set hydrated, user ở lại loading
+            // Các guard screen sẽ dừng fetch cho đến khi auth ổn định
+            console.warn("[AuthHydration] Failed to restore user — staying in loading");
           }
+
+          console.log(
+            `[AuthHydration] user.id=${user?.id} hydrated=${isHydrated}`,
+          );
+
+          // Không gọi getMyProfile ở đây nữa
+          // Để _layout.tsx hoặc home.tsx tự fetch khi cần
           return;
         }
 
@@ -259,32 +361,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             refreshExpiresIn: resp.refresh_expires_in,
           });
 
-          // Sau refresh thành công → pull initial data
+          // Sau refresh thành công → lấy user info
           const profile = await api.get<UserProfile>("/auth/me");
           setUser(profile);
+          // Chỉ set hydrated khi user đã được restore thành công
+          setIsHydrated(true);
 
-          try {
-            await pullInitialData(db, profile.id);
-            router.replace("/(tabs)/home");
-          } catch (err: unknown) {
-            const e = err as { status?: number };
-            if (e?.status === 403) {
-              router.replace("/welcome-setup");
-            } else {
-              router.replace("/(tabs)/home");
-            }
-          }
+          console.log(
+            `[AuthHydration] user restored after refresh — user.id=${user?.id}`,
+          );
         } catch {
           await forceSignOut();
         }
       } finally {
         setIsLoading(false);
+        // KHÔNG set isHydrated ở finally — chỉ set khi user confirmed
+        // Tránh race: screen fetch API trước khi user/onboarding sẵn sàng
+        console.log(
+          `[AuthHydration] done loading=${false} hydrated=${isHydrated} user.id=${user?.id}`,
+        );
         SplashScreen.hideAsync();
       }
     }
 
     checkAuth();
-  }, [forceSignOut]);
+  }, [forceSignOut, user?.id, isHydrated]);
 
   // ── Email Login (spec §2.4) ────────────────────────────────────────────────
   const emailLogin = useCallback(
@@ -294,6 +395,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
       await persistAuth(resp);
+
+      // Đánh dấu đây là login flow
+      loginFlowRef.current = true;
+
+      // Gọi navigateAfterAuth trực tiếp
+      // (isHydrated đã true từ startup check)
       await navigateAfterAuth(resp.is_first_login);
     },
     [persistAuth, navigateAfterAuth],
@@ -330,6 +437,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // lưu token + user vào storage/context
       await persistAuth(resp);
 
+      // Đánh dấu đây là login flow
+      loginFlowRef.current = true;
+
       // điều hướng sau login
       // chỉ cần truyền is_first_login
       await navigateAfterAuth(resp.is_first_login);
@@ -343,6 +453,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [persistAuth, navigateAfterAuth]);
 
   // ── Manual Sign-Out (spec §2.10) ──────────────────────────────────────────
+  // Dùng user?.id thay vì user (object) để tránh
+  // react-hooks/exhaustive-deps warning
+  // Chỉ cần userId để clear SQLite data của user hiện tại
+  const performSignOut = useCallback(async () => {
+    const currentUserId = user?.id;
+    const refreshToken = await getRefreshToken();
+    const appToken = await getAppToken();
+
+    // Fire-and-forget POST /auth/signout (spec §2.10 — không chờ response)
+    if (refreshToken && appToken) {
+      fetch(`${API_BASE_URL}/auth/signout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${appToken}`,
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }).catch(() => {
+        /* ignore */
+      });
+    }
+
+    // Xóa toàn bộ SQLite data của user
+    if (currentUserId) {
+      await clearUserData(currentUserId).catch(() => {});
+    }
+
+    // Xóa AsyncStorage profile cache
+    await clearProfileCache().catch(() => {});
+
+    // Sign out Google (cục bộ)
+    await googleSignOutLocal();
+
+    // Xóa tokens
+    await clearTokens();
+    setUser(null);
+    setIsHydrated(false);
+
+    router.replace("/auth");
+  }, [user?.id]);
+
   const signOut = useCallback(async () => {
     // Kiểm tra sync_queue (spec §2.10)
     try {
@@ -380,48 +531,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     await performSignOut();
-  }, [db]);
-
-  const performSignOut = useCallback(async () => {
-    const currentUser = user;
-    const refreshToken = await getRefreshToken();
-    const appToken = await getAppToken();
-
-    // Fire-and-forget POST /auth/signout (spec §2.10 — không chờ response)
-    if (refreshToken && appToken) {
-      fetch(`${API_BASE_URL}/auth/signout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${appToken}`,
-        },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      }).catch(() => {
-        /* ignore */
-      });
-    }
-
-    // Xóa toàn bộ SQLite data của user
-    if (currentUser?.id) {
-      await clearUserData(currentUser.id).catch(() => {});
-    }
-
-    // Xóa AsyncStorage profile cache
-    await clearProfileCache().catch(() => {});
-
-    // Sign out Google (cục bộ)
-    await googleSignOutLocal();
-
-    // Xóa tokens
-    await clearTokens();
-    setUser(null);
-
-    router.replace("/auth");
-  }, [user]);
+  }, [db, performSignOut]);
 
   const value: AuthContextValue = {
     user,
     isLoading,
+    isHydrated,
+    isInitialized: isHydrated,
     isAuthenticated: user !== null,
     emailLogin,
     register,

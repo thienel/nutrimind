@@ -51,15 +51,17 @@ export async function insertMeal(data: InsertMealData): Promise<string> {
   const id = generateUUID();
   const userId = normalizeUserId(data.userId);
   const now = new Date().toISOString();
-  
+
   const loggedAt = data.loggedAt ?? now;
   const loggedDate = toLocalDateKey(loggedAt);
 
   const mealName = data.name.trim() || "Meal";
   const calories = Number.isFinite(data.calories) ? data.calories : 0;
-  const protein_g = Number.isFinite(data.proteinG ?? 0) ? data.proteinG ?? 0 : 0;
-  const carb_g = Number.isFinite(data.carbsG ?? 0) ? data.carbsG ?? 0 : 0;
-  const fat_g = Number.isFinite(data.fatG ?? 0) ? data.fatG ?? 0 : 0;
+  const protein_g = Number.isFinite(data.proteinG ?? 0)
+    ? (data.proteinG ?? 0)
+    : 0;
+  const carb_g = Number.isFinite(data.carbsG ?? 0) ? (data.carbsG ?? 0) : 0;
+  const fat_g = Number.isFinite(data.fatG ?? 0) ? (data.fatG ?? 0) : 0;
   const meal_type = data.mealType ?? "other";
   const source = data.source ?? "manual";
 
@@ -84,13 +86,11 @@ export async function insertMeal(data: InsertMealData): Promise<string> {
         data.aiConfidence ?? null,
         loggedDate,
         loggedAt,
-        now
-      ]
+        now,
+      ],
     );
 
-    // Đẩy vào hàng đợi sync_queue
     await enqueue("create", "meal", id, {
-      local_id: id,
       food_name: mealName,
       meal_type: meal_type,
       calories: calories,
@@ -110,7 +110,7 @@ export async function insertMeal(data: InsertMealData): Promise<string> {
 export async function getMealHistory(
   userIdInput: number,
   limit = 50,
-  offset = 0
+  offset = 0,
 ): Promise<MealEntry[]> {
   const userId = normalizeUserId(userIdInput);
   const db = await getDb();
@@ -120,7 +120,7 @@ export async function getMealHistory(
      WHERE user_id = ? AND sync_status != 'deleted_pending'
      ORDER BY client_created_at DESC
      LIMIT ? OFFSET ?;`,
-    [userId, limit, offset]
+    [userId, limit, offset],
   );
 
   return rows.map((r) => ({
@@ -141,7 +141,7 @@ export async function getMealHistory(
 
 export async function getMealsByDate(
   userIdInput: number,
-  date: string
+  date: string,
 ): Promise<MealEntry[]> {
   const userId = normalizeUserId(userIdInput);
   const db = await getDb();
@@ -151,7 +151,7 @@ export async function getMealsByDate(
     `SELECT * FROM local_meal_entries
      WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending'
      ORDER BY client_created_at ASC;`,
-    [userId, dateOnly]
+    [userId, dateOnly],
   );
 
   return rows.map((r) => ({
@@ -172,7 +172,7 @@ export async function getMealsByDate(
 
 export async function deleteMeal(
   id: string,
-  userIdInput: number
+  userIdInput: number,
 ): Promise<void> {
   const userId = normalizeUserId(userIdInput);
   const db = await getDb();
@@ -180,14 +180,16 @@ export async function deleteMeal(
   await db.withTransactionAsync(async () => {
     const entry = await db.getFirstAsync<{ server_id: string | null }>(
       `SELECT server_id FROM local_meal_entries WHERE local_id = ? AND user_id = ?;`,
-      [id, userId]
+      [id, userId],
     );
 
     if (!entry) return;
 
     if (entry.server_id == null) {
       // Trường hợp A: Xóa entry chưa sync
-      await db.runAsync(`DELETE FROM local_meal_entries WHERE local_id = ?;`, [id]);
+      await db.runAsync(`DELETE FROM local_meal_entries WHERE local_id = ?;`, [
+        id,
+      ]);
       await db.runAsync(`DELETE FROM sync_queue WHERE local_id = ?;`, [id]);
     } else {
       // Trường hợp B & C: Đã sync hoặc đang sync
@@ -195,16 +197,18 @@ export async function deleteMeal(
         `UPDATE local_meal_entries
          SET sync_status = 'deleted_pending'
          WHERE local_id = ? AND user_id = ?;`,
-        [id, userId]
+        [id, userId],
       );
-      await enqueue("delete", "meal", id, { server_id: Number(entry.server_id) });
+      await enqueue("delete", "meal", id, {
+        server_id: Number(entry.server_id),
+      });
     }
   });
 }
 
 export async function getDailyCalories(
   userIdInput: number,
-  date: string
+  date: string,
 ): Promise<number> {
   const userId = normalizeUserId(userIdInput);
   const db = await getDb();
@@ -214,14 +218,14 @@ export async function getDailyCalories(
     `SELECT COALESCE(SUM(calories), 0) as total
      FROM local_meal_entries
      WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending';`,
-    [userId, dateOnly]
+    [userId, dateOnly],
   );
   return row?.total ?? 0;
 }
 
 export async function getDailyMacros(
   userIdInput: number,
-  date: string
+  date: string,
 ): Promise<{
   calories: number;
   protein: number;
@@ -245,7 +249,7 @@ export async function getDailyMacros(
       COALESCE(SUM(fat_g), 0) as fat
      FROM local_meal_entries
      WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending';`,
-    [userId, dateOnly]
+    [userId, dateOnly],
   );
 
   return {
@@ -258,7 +262,7 @@ export async function getDailyMacros(
 
 export async function getDailyCalorieHistory(
   userIdInput: number,
-  days = 7
+  days = 7,
 ): Promise<{ date: string; calories: number }[]> {
   const userId = normalizeUserId(userIdInput);
   const db = await getDb();
@@ -267,12 +271,12 @@ export async function getDailyCalorieHistory(
   // để đảm bảo ngày không có data sẽ map được với 0
   const today = new Date();
   const resultMap: Record<string, number> = {};
-  
+
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     // Sử dụng local timezone 'en-CA' để giữ YYYY-MM-DD
-    const dateKey = d.toLocaleDateString('en-CA'); 
+    const dateKey = d.toLocaleDateString("en-CA");
     resultMap[dateKey] = 0;
   }
 
@@ -285,7 +289,7 @@ export async function getDailyCalorieHistory(
        AND client_created_at >= datetime('now', ? || ' days')
      GROUP BY logged_date
      ORDER BY date ASC;`,
-    [userId, -days]
+    [userId, -days],
   );
 
   // Ghi đè vào map
@@ -304,11 +308,14 @@ export async function getDailyCalorieHistory(
     }));
 }
 
-export async function updateMealServerId(localId: string, serverId: string): Promise<void> {
+export async function updateMealServerId(
+  localId: string,
+  serverId: string,
+): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `UPDATE local_meal_entries SET server_id = ? WHERE local_id = ?`,
-    [serverId, localId]
+    [serverId, localId],
   );
 }
 
@@ -316,7 +323,7 @@ export async function getMealServerId(localId: string): Promise<string | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ server_id: string | null }>(
     `SELECT server_id FROM local_meal_entries WHERE local_id = ?`,
-    [localId]
+    [localId],
   );
   return row?.server_id ?? null;
 }

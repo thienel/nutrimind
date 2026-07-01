@@ -1,16 +1,14 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "./node_modules/expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
     "jsx": "react-native",
     "lib": ["ES2020", "DOM"],
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@/assets/*": [
-        "./assets/*"
-      ]
+      "@/*": ["src/*"],
+      "@/assets/*": ["assets/*"]
     }
   },
   "include": [

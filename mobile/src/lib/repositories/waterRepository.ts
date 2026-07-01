@@ -41,13 +41,15 @@ export async function logWater(data: InsertWaterData): Promise<string> {
         local_id, server_id, user_id, volume_ml, logged_date,
         client_created_at, sync_status, sync_attempts, last_sync_error, created_at
       ) VALUES (?, NULL, ?, ?, ?, ?, 'pending', 0, NULL, ?);`,
-      [id, data.userId, data.amountMl, loggedDate, loggedAt, now]
+      [id, data.userId, data.amountMl, loggedDate, loggedAt, now],
     );
 
+    // Payload phải khớp với WaterCreatePayload trong sync.service.ts
+    // Backend yêu cầu: volume_ml, logged_date, client_created_at
     await enqueue("create", "water", id, {
-      local_id: id,
-      amount_ml: data.amountMl,
-      logged_at: loggedAt,
+      volume_ml: data.amountMl,
+      logged_date: loggedDate,
+      client_created_at: loggedAt,
     });
   });
 
@@ -60,14 +62,14 @@ export async function logWater(data: InsertWaterData): Promise<string> {
  */
 export async function getWaterByDate(
   userId: number,
-  date: string
+  date: string,
 ): Promise<WaterLog[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<any>(
     `SELECT * FROM local_water_entries
      WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending'
      ORDER BY client_created_at ASC;`,
-    [userId, date]
+    [userId, date],
   );
 
   return rows.map((r) => ({
@@ -87,7 +89,7 @@ export async function getWaterByDate(
 export async function getWaterHistory(
   userId: number,
   limit = 30,
-  offset = 0
+  offset = 0,
 ): Promise<WaterLog[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<any>(
@@ -95,7 +97,7 @@ export async function getWaterHistory(
      WHERE user_id = ? AND sync_status != 'deleted_pending'
      ORDER BY client_created_at DESC
      LIMIT ? OFFSET ?;`,
-    [userId, limit, offset]
+    [userId, limit, offset],
   );
 
   return rows.map((r) => ({
@@ -114,14 +116,14 @@ export async function getWaterHistory(
  */
 export async function getDailyWaterTotal(
   userId: number,
-  date: string
+  date: string,
 ): Promise<number> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(volume_ml), 0) as total
      FROM local_water_entries
      WHERE user_id = ? AND logged_date = ? AND sync_status != 'deleted_pending';`,
-    [userId, date]
+    [userId, date],
   );
   return row?.total ?? 0;
 }
@@ -131,7 +133,7 @@ export async function getDailyWaterTotal(
  */
 export async function getDailyWaterHistory(
   userId: number,
-  days = 7
+  days = 7,
 ): Promise<{ date: string; amount_ml: number }[]> {
   const db = await getDb();
   return db.getAllAsync<{ date: string; amount_ml: number }>(
@@ -142,27 +144,29 @@ export async function getDailyWaterHistory(
        AND client_created_at >= datetime('now', ? || ' days')
      GROUP BY logged_date
      ORDER BY date ASC;`,
-    [userId, -days]
+    [userId, -days],
   );
 }
 
 /** Xóa mềm water log */
 export async function deleteWaterLog(
   id: string,
-  userId: number
+  userId: number,
 ): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
     const entry = await db.getFirstAsync<{ server_id: string | null }>(
       `SELECT server_id FROM local_water_entries WHERE local_id = ? AND user_id = ?;`,
-      [id, userId]
+      [id, userId],
     );
 
     if (!entry) return;
 
     if (entry.server_id == null) {
       // Trường hợp A
-      await db.runAsync(`DELETE FROM local_water_entries WHERE local_id = ?;`, [id]);
+      await db.runAsync(`DELETE FROM local_water_entries WHERE local_id = ?;`, [
+        id,
+      ]);
       await db.runAsync(`DELETE FROM sync_queue WHERE local_id = ?;`, [id]);
     } else {
       // Trường hợp B & C
@@ -170,10 +174,11 @@ export async function deleteWaterLog(
         `UPDATE local_water_entries
          SET sync_status = 'deleted_pending'
          WHERE local_id = ? AND user_id = ?;`,
-        [id, userId]
+        [id, userId],
       );
-      await enqueue("delete", "water", id, { server_id: Number(entry.server_id) });
+      await enqueue("delete", "water", id, {
+        server_id: Number(entry.server_id),
+      });
     }
   });
 }
-
