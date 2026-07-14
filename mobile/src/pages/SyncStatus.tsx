@@ -5,6 +5,7 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
@@ -18,7 +19,23 @@ export function SyncStatus() {
     isLoading,
     handleRetryAll,
     handleDismissAll,
+    handleManualSync,
   } = useSyncStatus();
+
+  const onSyncPress = async () => {
+    const result = await handleManualSync();
+    if (result) {
+      if (result.failed > 0) {
+        Alert.alert("Đồng bộ", `Đã đồng bộ ${result.synced} mục, ${result.failed} mục thất bại.`);
+      } else if (result.synced > 0) {
+        Alert.alert("Đồng bộ", `Đồng bộ thành công ${result.synced} mục.`);
+      } else {
+        Alert.alert("Đồng bộ", "Không có dữ liệu mới để đồng bộ.");
+      }
+    } else {
+      Alert.alert("Lỗi", "Không thể thực hiện đồng bộ.");
+    }
+  };
 
   // Helper parse JSON để lấy thông tin hiển thị
   const renderItemTitle = (entityType: string, payloadStr: string) => {
@@ -77,6 +94,12 @@ export function SyncStatus() {
           <View style={styles.statRow}>
             <XCircle size={20} color="#EF4444" />
             <Text style={styles.statText}>Thất bại: {counts.failed} mục</Text>
+          </View>
+
+          <View style={styles.syncNowContainer}>
+            <Pressable style={styles.syncNowBtn} onPress={onSyncPress}>
+              <Text style={styles.syncNowBtnText}>Đồng bộ ngay</Text>
+            </Pressable>
           </View>
 
           {hasFailed && (
@@ -215,5 +238,23 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     fontWeight: "600",
     fontSize: 15,
+  },
+  syncNowContainer: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    paddingTop: 16,
+  },
+  syncNowBtn: {
+    backgroundColor: "#3B82F6",
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  syncNowBtnText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 16,
   },
 });
