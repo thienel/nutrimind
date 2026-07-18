@@ -268,6 +268,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 100);
   }, [isHydrated, user, navigateAfterAuth]);
 
+  // ── Effect: tự động pull dữ liệu ban đầu khi auth thành công ─────────────
+  const hasPulledRef = useRef(false);
+
+  useEffect(() => {
+    if (!isHydrated || !user?.id) {
+      hasPulledRef.current = false; // Reset khi sign out
+      return;
+    }
+    if (hasPulledRef.current) return;
+    hasPulledRef.current = true;
+    
+    console.log(`[AuthContext] Triggers pullInitialData for user=${user.id}`);
+    pullInitialData(db, user.id).catch((err) => {
+      console.error("[AuthContext] pullInitialData error:", err);
+    });
+  }, [isHydrated, user?.id, db]);
+
+
   // ── Force sign-out (spec §2.9) ────────────────────────────────────────────
   // FIX: Dùng user?.id thay vì user (object) để tránh
   // react-hooks/exhaustive-deps warning
@@ -276,10 +294,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Lưu userId trước khi clear
     const userId = user?.id;
     await clearTokens();
-    await clearProfileCache().catch(() => {});
+    clearProfileCache();
     // Xóa SQLite data nếu biết userId
     if (userId) {
-      await clearUserData(userId).catch(() => {});
+      await clearUserData(db, userId).catch(() => {});
     }
     setUser(null);
     setIsHydrated(false);
@@ -477,11 +495,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Xóa toàn bộ SQLite data của user
     if (currentUserId) {
-      await clearUserData(currentUserId).catch(() => {});
+      await clearUserData(db, currentUserId).catch(() => {});
     }
 
     // Xóa AsyncStorage profile cache
-    await clearProfileCache().catch(() => {});
+    clearProfileCache();
 
     // Sign out Google (cục bộ)
     await googleSignOutLocal();
@@ -498,7 +516,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Kiểm tra sync_queue (spec §2.10)
     try {
       const result = await db.getFirstAsync<{ count: number }>(
-        "SELECT COUNT(*) as count FROM sync_queue WHERE status IN ('pending', 'failed')",
+        "SELECT COUNT(*) as count FROM sync_queue WHERE status IN ('pending', 'failed', 'processing')",
       );
 
       if (result && result.count > 0) {

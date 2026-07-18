@@ -138,10 +138,15 @@ export async function request<T = unknown>(
       // Retry request gốc với token mới
       return request<T>(path, { ...options, _retry: true });
     } else {
-      // Refresh thất bại → force sign-out
-      await clearTokens();
-      if (_forceSignOutCallback) {
-        await _forceSignOutCallback();
+      // Refresh thất bại
+      // Chỉ force sign-out nếu request này CÓ gửi token (tức là user đang đăng nhập)
+      // Nếu appToken = null, có nghĩa là user đã logout (hoặc chưa từng login),
+      // thì không được gọi _forceSignOutCallback (tránh wipe data của session mới)
+      if (appToken) {
+        await clearTokens();
+        if (_forceSignOutCallback) {
+          await _forceSignOutCallback();
+        }
       }
       throw { status: 401, message: "Phiên đăng nhập đã hết hạn" } as ApiError;
     }

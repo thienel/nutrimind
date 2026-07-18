@@ -17,7 +17,7 @@ import NetInfo, {
   NetInfoState,
   NetInfoSubscription,
 } from "@react-native-community/netinfo";
-import { AppState, AppStateStatus } from "react-native";
+import { AppState, AppStateStatus, Alert } from "react-native";
 import { useSQLiteContext } from "expo-sqlite";
 import { SyncService } from "@/services/sync.service";
 
@@ -33,7 +33,7 @@ interface NetworkContextValue {
   /** true nếu vừa sync thành công, biến mất sau vài giây */
   showSyncSuccess: boolean;
   /** Kích hoạt sync thủ công */
-  triggerSync(): void;
+  triggerSync(notifyUser?: boolean): Promise<{ synced: number; failed: number; skipped: number } | null>;
 }
 
 const NetworkContext = createContext<NetworkContextValue | null>(null);
@@ -62,18 +62,28 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
   const isSyncingRef = useRef(false);
   const prevOnline = useRef(true);
 
-  const triggerSync = useCallback(async () => {
-    if (isSyncingRef.current || !userId) return;
+  const triggerSync = useCallback(async (notifyUser: boolean = false) => {
+    if (isSyncingRef.current || !userId) return null;
     // Guard: SQLite db có thể chưa sẵn sàng khi NetworkContext mount
     if (!db) {
       console.warn("[NetworkContext] triggerSync skipped — db not ready");
-      return;
+      return null;
     }
     isSyncingRef.current = true;
     setIsSyncing(true);
+    let result = null;
     try {
       const syncService = new SyncService(db);
-      const result = await syncService.runSync();
+      
+      const pendingCount = await syncService.getPendingCount();
+      if (pendingCount > 0 && notifyUser) {
+        Alert.alert(
+          "Đồng bộ dữ liệu",
+          `Có ${pendingCount} mục cần đồng bộ. Hệ thống đang tiến hành đồng bộ...`
+        );
+      }
+
+      result = await syncService.runSync();
       const remaining = await syncService.getPendingCount();
       setPendingSyncCount(remaining);
 
@@ -86,6 +96,7 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
       isSyncingRef.current = false;
       setIsSyncing(false);
     }
+    return result;
   }, [userId, db]);
 
   useEffect(() => {
@@ -104,9 +115,9 @@ export function NetworkProvider({ children, userId }: NetworkProviderProps) {
         setIsOnline(online);
         setConnectionType(state.type);
 
-        // Nếu vừa online trở lại → trigger sync
+        // Nếu vừa online trở lại → trigger sync có thông báo nếu có dữ liệu
         if (online && !prevOnline.current) {
-          triggerSync();
+          triggerSync(true);
         }
         prevOnline.current = online;
       },

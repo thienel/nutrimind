@@ -7,7 +7,7 @@ import type { SyncQueueItem, SyncQueueStatus } from "@/db/schema";
 
 export function useSyncStatus() {
   const db = useSQLiteContext();
-  const { triggerSync } = useNetwork();
+  const { triggerSync, isSyncing } = useNetwork();
   const { isHydrated, user } = useAuth();
 
   const [counts, setCounts] = useState<Record<SyncQueueStatus, number>>({
@@ -75,6 +75,13 @@ export function useSyncStatus() {
       mountedRef.current = false;
     };
   }, [fetchStatus]);
+
+  // Tự động làm mới khi tiến trình sync tự động/thủ công chạy xong
+  useEffect(() => {
+    if (!isSyncing) {
+      fetchStatus();
+    }
+  }, [isSyncing, fetchStatus]);
 
   const handleRetryAll = async () => {
     if (!db || !isHydrated || !user) {
