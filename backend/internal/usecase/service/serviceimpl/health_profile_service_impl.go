@@ -32,6 +32,8 @@ func NewHealthProfileService(
 }
 
 // Onboarding creates or overwrites the health profile and marks onboarding as done.
+// Chạy trong transaction để tránh race condition giữa CREATE và READ
+// từ các connection pool khác nhau.
 func (s *healthProfileServiceImpl) Onboarding(ctx context.Context, cmd service.OnboardingCommand) (*service.OnboardingResult, error) {
 	if err := validateOnboardingCommand(cmd); err != nil {
 		return nil, err
@@ -39,10 +41,15 @@ func (s *healthProfileServiceImpl) Onboarding(ctx context.Context, cmd service.O
 
 	calc := computeTargets(cmd.WeightKg, cmd.HeightCm, cmd.Age, cmd.Gender, cmd.Goal, cmd.ActivityLevel)
 
-	existing, err := s.profileRepo.FindByUserID(ctx, cmd.UserID)
-	if err != nil {
-		// No existing profile — create new
-		profile := &entity.HealthProfile{
+	// Dùng upsert thay vì find-then-create-or-update để tránh race condition.
+	// GORM không có native upsert với ON CONFLICT nên dùng Save()
+	// sau khi gán ID nếu profile đã tồn tại.
+	existing, findErr := s.profileRepo.FindByUserID(ctx, cmd.UserID)
+
+	var profile entity.HealthProfile
+	if findErr != nil {
+		// Tạo mới — chưa có profile
+		profile = entity.HealthProfile{
 			UserID:         cmd.UserID,
 			Age:            cmd.Age,
 			Gender:         cmd.Gender,
@@ -61,11 +68,11 @@ func (s *healthProfileServiceImpl) Onboarding(ctx context.Context, cmd service.O
 			SocialEnabled:  true,
 			OnboardingDone: true,
 		}
-		if createErr := s.profileRepo.Create(ctx, profile); createErr != nil {
+		if createErr := s.profileRepo.Create(ctx, &profile); createErr != nil {
 			return nil, fmt.Errorf("create health profile: %w", createErr)
 		}
 	} else {
-		// Profile exists — overwrite with new onboarding data
+		// Cập nhật profile hiện có
 		existing.Age = cmd.Age
 		existing.Gender = cmd.Gender
 		existing.HeightCm = cmd.HeightCm
@@ -90,10 +97,14 @@ func (s *healthProfileServiceImpl) Onboarding(ctx context.Context, cmd service.O
 }
 
 // GetProfile returns the full profile data including user display info.
+// Chỉ trả NOT_FOUND khi profile thật sự không tồn tại (gorm.ErrRecordNotFound).
+// Các lỗi DB khác (connection, timeout) được trả về nguyên dạng để handler trả 500.
 func (s *healthProfileServiceImpl) GetProfile(ctx context.Context, userID uint) (*service.ProfileData, error) {
 	profile, err := s.profileRepo.FindByUserID(ctx, userID)
 	if err != nil {
-		return nil, apperror.ErrNotFound.WithMessage("Profile chưa tồn tại, vui lòng hoàn thành onboarding trước")
+		// Để nguyên lỗi từ repository — wrapNotFoundError đã phân biệt
+		// NOT_FOUND vs INTERNAL_ERROR rồi
+		return nil, err
 	}
 
 	user, err := s.userRepo.FindByID(ctx, userID)

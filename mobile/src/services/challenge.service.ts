@@ -78,3 +78,103 @@ export async function joinChallenge(
     return null;
   }
 }
+
+// ── Challenge Progress types ──────────────────────────────────────────────
+
+export type DayGridItem = {
+  date: string;
+  met_goal: boolean | null;
+};
+
+export type ChallengeInfo = {
+  id: number;
+  name: string;
+  type: string;
+};
+
+export type MyProgress = {
+  enrollment_id: number;
+  start_date: string;
+  end_date: string;
+  day_current: number;
+  day_total: number;
+  grid: DayGridItem[];
+  badge_awarded: boolean;
+};
+
+export type FriendProgress = {
+  user_id: number;
+  display_name: string;
+  avatar_url: string;
+  grid: DayGridItem[];
+};
+
+export type ChallengeProgressData = {
+  challenge: ChallengeInfo;
+  my_progress: MyProgress;
+  friends_progress: FriendProgress[];
+};
+
+/**
+ * Lấy tiến độ một challenge.
+ * Backend: GET /social/challenges/:id/progress
+ */
+export async function getChallengeProgress(
+  challengeId: number,
+): Promise<ChallengeProgressData | null> {
+  try {
+    return await api.get<ChallengeProgressData>(
+      `/social/challenges/${challengeId}/progress`,
+    );
+  } catch (err: any) {
+    console.warn("[ChallengeService] Failed to fetch progress:", err);
+    return null;
+  }
+}
+
+/**
+ * Rời bỏ một challenge.
+ * Backend: DELETE /social/challenges/:id/enrollment
+ */
+export async function abandonChallenge(
+  challengeId: number,
+): Promise<boolean> {
+  try {
+    await api.delete(`/social/challenges/${challengeId}/enrollment`);
+    return true;
+  } catch (err: any) {
+    console.warn("[ChallengeService] Failed to abandon challenge:", err);
+    return false;
+  }
+}
+
+// ── Leaderboard types ─────────────────────────────────────────────────────
+
+export type LeaderboardEntry = {
+  rank: number;
+  user_id: number;
+  display_name: string;
+  avatar_url: string;
+  goals_completed: number;
+  is_me: boolean;
+};
+
+export type LeaderboardData = {
+  week_start: string;
+  week_end: string;
+  note: string;
+  rankings: LeaderboardEntry[];
+};
+
+/**
+ * Lấy bảng xếp hạng hàng tuần.
+ * Backend: GET /social/leaderboard
+ */
+export async function getLeaderboard(): Promise<LeaderboardData | null> {
+  try {
+    return await api.get<LeaderboardData>("/social/leaderboard");
+  } catch (err: any) {
+    console.warn("[ChallengeService] Failed to fetch leaderboard:", err);
+    return null;
+  }
+}

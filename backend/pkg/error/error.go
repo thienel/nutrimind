@@ -1,6 +1,7 @@
 package apperror
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -18,6 +19,15 @@ func (e *AppError) Error() string {
 		return fmt.Sprintf("%s: %s (%v)", e.Code, e.Message, e.Err)
 	}
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
+}
+
+// IsNotFound returns true if the error is an AppError with code NOT_FOUND.
+func IsNotFound(err error) bool {
+	var ae *AppError
+	if errors.As(err, &ae) {
+		return ae.Code == "NOT_FOUND"
+	}
+	return false
 }
 
 // WithMessage returns a new AppError with an updated message
