@@ -458,7 +458,7 @@ export default function HomeScreen() {
           // Truyền meals/water/health từ các STEP trên vào
           //    để mission service KHÔNG fetch lại API.
           //    Trước đây getTodayMissions() tự fetch lại,
-          //    gây duplicate /meals request �' log 500 warning.
+          //    gây duplicate /meals request �' log 500 warning.
           // =======================================================
           const missionsData = await getTodayMissions(meals, water, health);
 
@@ -600,7 +600,7 @@ export default function HomeScreen() {
         mountedRef.current = false;
         isFetchingRef.current = false;
       };
-    }, [isHydrated, user?.id]),
+    }, [isHydrated, user]),
   );
 
   return (
@@ -613,8 +613,8 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.hello}>Hello,</Text>
-            <Text style={styles.name}>{displayName} �</Text>
-            <Text style={styles.sub}>Let's make today amazing</Text>
+            <Text style={styles.name}>{displayName} 👋</Text>
+            <Text style={styles.sub}>Let&apos;s make today amazing</Text>
           </View>
 
           <TouchableOpacity style={styles.bellBtn}>
@@ -704,10 +704,10 @@ export default function HomeScreen() {
               ]}
             >
               {(dashboardData?.calories.logged || 0) <= 0
-                ? "�️ Log your first meal to start tracking"
+                ? "🍽️ Log your first meal to start tracking"
                 : onTrack
-                  ? "� You're on track! Keep it up"
-                  : "� You're over today's calorie goal"}
+                  ? "✅ You're on track! Keep it up"
+                  : "⚠️ You're over today's calorie goal"}
             </Text>
           </View>
         </View>
@@ -739,7 +739,7 @@ export default function HomeScreen() {
         {/* STREAK */}
         <View style={styles.streakCard}>
           <Text style={styles.streakLabel}>Daily Streak</Text>
-          <Text style={styles.streakTitle}>� {streak?.current ?? 0} Days</Text>
+          <Text style={styles.streakTitle}>🔥 {streak?.current ?? 0} Days</Text>
           <Text style={styles.streakSub}>
             {streak
               ? `You've stayed consistent for ${streak.current} days`
@@ -747,9 +747,7 @@ export default function HomeScreen() {
           </Text>
 
           <View style={styles.streakBar}>
-            {(
-              streak?.weeklyProgress ?? []
-            ).map((done, i) => (
+            {(streak?.weeklyProgress ?? []).map((done, i) => (
               <View
                 key={i}
                 style={[styles.streakDot, done && { backgroundColor: "white" }]}
@@ -829,7 +827,7 @@ export default function HomeScreen() {
         </View>
 
         {/* FRIEND MOTIVATION */}
-        <Text style={styles.sectionTitle}>Stay Motivated �</Text>
+        <Text style={styles.sectionTitle}>Stay Motivated 💪</Text>
 
         <TouchableOpacity
           activeOpacity={0.9}
@@ -840,7 +838,7 @@ export default function HomeScreen() {
               <Text style={styles.friendLabel}>Friends Motivation</Text>
               <Text style={styles.friendTitle}>
                 {friendsActivity?.activeCount != null
-                  ? `${friendsActivity.activeCount} friends active �`
+                  ? `${friendsActivity.activeCount} friends active 🔥`
                   : "No friends yet"}
               </Text>
               <Text style={styles.friendSub}>
@@ -897,14 +895,11 @@ export default function HomeScreen() {
           <Text style={styles.insightBadge}>AI Insight</Text>
 
           <Text style={styles.insightTitle}>
-            {dashboardData?.insight
-              ? "AI Recommendation"
-              : "No insights yet"}
+            {dashboardData?.insight ? "AI Recommendation" : "No insights yet"}
           </Text>
 
           <Text style={styles.insightSub}>
-            {dashboardData?.insight ||
-              "Check back after logging more meals"}
+            {dashboardData?.insight || "Check back after logging more meals"}
           </Text>
 
           <TouchableOpacity
@@ -964,9 +959,11 @@ function Macro({ label, value, color }: any) {
 function Mission({ text, done = false }: any) {
   return (
     <View style={styles.missionItem}>
-      {done
-        ? <CheckCircle size={20} color="#10B981" />
-        : <Circle size={20} color="#CBD5E1" />}
+      {done ? (
+        <CheckCircle size={20} color="#10B981" />
+      ) : (
+        <Circle size={20} color="#CBD5E1" />
+      )}
       <Text style={styles.missionText}>{text}</Text>
     </View>
   );
@@ -1486,4 +1483,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-
