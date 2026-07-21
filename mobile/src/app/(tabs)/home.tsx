@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useMemo, useState, useRef } from "react";
+import React, { useCallback, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -542,6 +542,11 @@ export default function HomeScreen() {
             weightData = {
               latest_kg: latestWeightObj.weight_kg,
               days_ago: daysAgo,
+            };
+          } else if (safeProfile?.weight_kg) {
+            weightData = {
+              latest_kg: safeProfile.weight_kg,
+              days_ago: 0,
             };
           }
 

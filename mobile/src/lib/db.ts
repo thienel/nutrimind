@@ -59,8 +59,7 @@ async function migrateV1(db: SQLite.SQLiteDatabase): Promise<void> {
 }
 
 /** Xóa toàn bộ data của user, gọi khi sign-out */
-export async function clearUserData(userId: number): Promise<void> {
-  const db = await getDb();
+export async function clearUserData(db: SQLite.SQLiteDatabase, userId: number): Promise<void> {
 
   await db.withTransactionAsync(async () => {
     await db.runAsync("DELETE FROM local_profile;");
