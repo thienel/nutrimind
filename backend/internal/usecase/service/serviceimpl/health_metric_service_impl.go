@@ -30,9 +30,12 @@ func NewHealthMetricService(
 
 // LogWeight validates, upserts the weight entry, then syncs profile fields.
 func (s *healthMetricServiceImpl) LogWeight(ctx context.Context, cmd service.LogWeightMetricCommand) (*service.WeightLogResult, error) {
-	// --- Require onboarding ---
+	// Require onboarding — giữ nguyên lỗi từ repository (NOT_FOUND / INTERNAL_ERROR)
 	profile, err := s.profileRepo.FindByUserID(ctx, cmd.UserID)
-	if err != nil || !profile.OnboardingDone {
+	if err != nil {
+		return nil, err
+	}
+	if !profile.OnboardingDone {
 		return nil, apperror.ErrOnboardingRequired.WithMessage("Vui lòng hoàn thành onboarding trước khi ghi cân nặng")
 	}
 
@@ -127,7 +130,10 @@ func (s *healthMetricServiceImpl) GetWeightHistory(ctx context.Context, userID u
 // GetHealthSummary returns stored targets and weight data for the health summary screen.
 func (s *healthMetricServiceImpl) GetHealthSummary(ctx context.Context, userID uint) (*service.HealthSummaryResult, error) {
 	profile, err := s.profileRepo.FindByUserID(ctx, userID)
-	if err != nil || !profile.OnboardingDone {
+	if err != nil {
+		return nil, err
+	}
+	if !profile.OnboardingDone {
 		return nil, apperror.ErrNotFound.WithMessage("Profile không tồn tại hoặc chưa hoàn thành onboarding")
 	}
 

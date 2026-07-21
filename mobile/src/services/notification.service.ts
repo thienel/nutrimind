@@ -1,6 +1,26 @@
 import { api } from "@/lib/apiClient";
 
 // =======================================================
+// Đăng ký FCM token với backend để nhận push notification.
+// Gọi sau khi user đăng nhập thành công.
+// Backend: POST /notifications/fcm-token
+// =======================================================
+export async function registerFCMToken(
+  fcmToken: string,
+  platform: "android" | "ios",
+): Promise<void> {
+  try {
+    await api.post("/notifications/fcm-token", {
+      fcm_token: fcmToken,
+      platform,
+    });
+    console.log("[FCM] Token registered successfully");
+  } catch (err: any) {
+    console.warn("[FCM] Failed to register token:", err?.message ?? err);
+  }
+}
+
+// =======================================================
 // Lấy số lượng notification chưa đọc
 //
 // Dùng cho HomeScreen:

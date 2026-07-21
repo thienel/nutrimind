@@ -29,7 +29,6 @@ function AppWithProviders() {
 
   // lấy route hiện tại (expo-router)
   const segments = useSegments();
-  const pathString = segments.join("/");
 
   useEffect(() => {
     // =======================================================
@@ -138,12 +137,10 @@ function AppWithProviders() {
       }
     };
 
-    // chạy check mỗi khi:
-    // - isHydrated thay đổi (tránh chạy trước khi auth sẵn sàng)
-    // - user thay đổi
-    // - route thay đổi
+    // chạy check MỘT lần sau khi auth đã sẵn sàng.
+    // Không chạy lại trên mỗi lần navigate — chỉ cần confirm onboarding_done một lần.
     checkProfile();
-  }, [isHydrated, user, pathString, segments]);
+  }, [isHydrated, user]);
 
   return (
     // =======================================================

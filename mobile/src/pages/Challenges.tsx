@@ -12,6 +12,7 @@ import { router } from "expo-router";
 import {
   getChallengeCatalogue,
   getMyChallenges,
+  joinChallenge,
 } from "@/services/challenge.service";
 import type { CatalogueChallengeItemResponse } from "@/app/(tabs)/home";
 
@@ -73,7 +74,16 @@ export default function ChallengesScreen() {
                 <TouchableOpacity
                   key={i}
                   style={styles.activeCard}
-                  onPress={() => router.push("/challenge-detail")}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/challenge-detail",
+                      params: {
+                        id: String(ch.id),
+                        name: ch.name,
+                        type: ch.type ?? "",
+                      },
+                    })
+                  }
                 >
                   <Text style={styles.activeTitle}>{ch.name}</Text>
                   {ch.description && (
@@ -114,7 +124,7 @@ export default function ChallengesScreen() {
                     key={ch.id ?? i}
                     title={ch.name}
                     subtitle={ch.description}
-                    onJoin={() => handleJoin(ch.id)}
+                    onJoin={() => handleJoin(ch.id, ch.name, ch.type ?? "")}
                   />
                 ))}
               </View>
@@ -126,9 +136,15 @@ export default function ChallengesScreen() {
   );
 }
 
-function handleJoin(_challengeId: number) {
-  // TODO: gọi joinChallenge(_challengeId) từ challenge.service.ts
-  router.push("/challenge-detail");
+function handleJoin(challengeId: number, challengeName: string, challengeType: string) {
+  joinChallenge(challengeId).then((result) => {
+    if (result) {
+      router.push({
+        pathname: "/challenge-detail",
+        params: { id: String(challengeId), name: challengeName, type: challengeType },
+      });
+    }
+  });
 }
 
 /**

@@ -15,6 +15,7 @@ import { useSQLiteContext } from "expo-sqlite";
 import { getGoogleIdToken, googleSignOutLocal } from "@/lib/googleSignIn";
 import { getMyProfile } from "@/services/profileService";
 import { pullInitialData } from "@/services/initialData.service";
+import { registerFCMToken } from "@/services/notification.service";
 import {
   clearTokens,
   getAppToken,
@@ -117,6 +118,47 @@ function isTokenFresh(token: string): boolean {
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
+/** 
+ * Đăng ký FCM token cho push notification.
+ * Dùng dynamic import để tránh crash Expo Go (SDK 53+ không hỗ trợ expo-notifications trong Expo Go).
+ * Chỉ chạy trên build standalone hoặc simulator (skip trên Expo Go).
+ */
+async function registerFCMTokenForPush() {
+  try {
+    const Constants = await import("expo-constants");
+    const appOwnership = Constants.default?.appOwnership ?? Constants.default?.expoConfig?.owner;
+    if (appOwnership === "expo") {
+      console.log("[FCM] Skipped — expo-notifications not supported in Expo Go (SDK 53+)");
+      return;
+    }
+
+    const [{ default: Device }, { default: Notifications }] = await Promise.all([
+      import("expo-device"),
+      import("expo-notifications"),
+    ]);
+
+    if (!Device.isDevice) {
+      console.log("[FCM] Skipped — not a physical device");
+      return;
+    }
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== "granted") {
+      console.log("[FCM] Permission not granted");
+      return;
+    }
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    const platform = Device.osName === "Android" ? "android" : "ios";
+    await registerFCMToken(token, platform);
+  } catch (err: any) {
+    console.warn("[FCM] Registration failed:", err?.message ?? err);
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const db = useSQLiteContext();
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -174,6 +216,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshExpiresIn: resp.refresh_expires_in,
     });
     setUser(resp.user);
+    // Đánh dấu auth đã sẵn sàng để các screen được phép fetch API
+    setIsHydrated(true);
   }, []);
 
   // ── Navigation sau auth ──────────────────────────────────────────────────
@@ -207,6 +251,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         );
         if (profile.onboarding_done) {
           router.replace("/(tabs)/home");
+          // Fire-and-forget FCM token registration sau khi đã vào home
+          registerFCMTokenForPush();
         } else {
           console.log(
             "[ProfileCheck] navigateAfterAuth redirecting to welcome-setup",
@@ -294,7 +340,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Lưu userId trước khi clear
     const userId = user?.id;
     await clearTokens();
-    clearProfileCache();
+    try { clearProfileCache(); } catch {}
     // Xóa SQLite data nếu biết userId
     if (userId) {
       await clearUserData(db, userId).catch(() => {});
@@ -499,7 +545,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Xóa AsyncStorage profile cache
-    clearProfileCache();
+    try { clearProfileCache(); } catch {}
 
     // Sign out Google (cục bộ)
     await googleSignOutLocal();

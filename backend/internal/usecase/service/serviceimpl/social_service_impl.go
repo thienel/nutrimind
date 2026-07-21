@@ -66,12 +66,17 @@ func NewSocialService(
 	}
 }
 
-// checkSocialEnabled returns ErrSocialDisabled if the user's profile has social_enabled=false,
-// or ErrOnboardingRequired if the profile doesn't exist.
+// checkSocialEnabled returns ErrOnboardingRequired if profile doesn't exist,
+// ErrSocialDisabled if social is off, or propagates the DB error.
 func (s *socialServiceImpl) checkSocialEnabled(ctx context.Context, userID uint) error {
 	profile, err := s.profileRepo.FindByUserID(ctx, userID)
 	if err != nil {
-		return apperror.ErrOnboardingRequired
+		// Nếu profile không tồn tại → ONBOARDING_REQUIRED
+		// Các lỗi DB khác → propagate nguyên dạng
+		if apperror.IsNotFound(err) {
+			return apperror.ErrOnboardingRequired
+		}
+		return err
 	}
 	if !profile.SocialEnabled {
 		return apperror.ErrSocialDisabled

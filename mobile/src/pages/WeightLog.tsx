@@ -61,7 +61,7 @@ export function WeightLog() {
   const rawCurrentW = latestWeight || startW;
   const currentW = isNaN(rawCurrentW) || rawCurrentW <= 0 ? 70 : rawCurrentW;
 
-  const rawGoalW = Number(profile?.goalWeight) || 65;
+  const rawGoalW = Number(profile?.goal) || 65;
   const goalW = isNaN(rawGoalW) || rawGoalW <= 0 ? 65 : rawGoalW;
 
   const diff = isNaN(currentW - startW) ? 0 : currentW - startW;

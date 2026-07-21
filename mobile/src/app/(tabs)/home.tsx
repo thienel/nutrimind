@@ -233,104 +233,104 @@ function formatMacroValue(value: number, goal: number) {
 }
 
 export default function HomeScreen() {
-  // Láº¥y thÃ´ng tin user hiá»‡n táº¡i vÃ  tráº¡ng thÃ¡i auth Ä‘Ã£ load xong chÆ°a
+  // Lấy thông tin user hiện tại và trạng thái auth đã load xong chưa
   const { user, isHydrated } = useAuth();
 
-  // State má»Ÿ/Ä‘Ã³ng modal update cÃ¢n náº·ng
+  // State mở/đóng modal update cân nặng
   const [showWeightModal, setShowWeightModal] = useState(false);
 
-  // State lÆ°u input cÃ¢n náº·ng user nháº­p
+  // State lưu input cân nặng user nhập
   const [weightInput, setWeightInput] = useState("");
 
-  // State chá»©a toÃ n bá»™ dá»¯ liá»‡u dashboard home
-  // Bao gá»“m calories, macro, nÆ°á»›c, challenge, insight...
+  // State chứa toàn bộ dữ liệu dashboard home
+  // Bao gồm calories, macro, nước, challenge, insight...
   const [dashboardData, setDashboardData] = useState<HomeDashboardData | null>(
     null,
   );
 
-  // State chá»©a danh sÃ¡ch nhiá»‡m vá»¥ trong ngÃ y
+  // State chứa danh sách nhiệm vụ trong ngày
   const [missions, setMissions] = useState<MissionItem[]>([]);
 
-  // State streak hiá»‡n táº¡i (sá»‘ ngÃ y liÃªn tá»¥c)
+  // State streak hiện tại (số ngày liên tục)
   const [streak, setStreak] = useState<StreakData | null>(null);
 
-  // State hoáº¡t Ä‘á»™ng báº¡n bÃ¨
+  // State hoạt động bạn bè
   const [friendsActivity, setFriendsActivity] =
     useState<FriendsActivityData | null>(null);
 
-  // State sá»‘ thÃ´ng bÃ¡o chÆ°a Ä‘á»c
+  // State số thông báo chưa đọc
   const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
 
-  // Táº¡o tÃªn hiá»ƒn thá»‹:
-  // Æ°u tiÃªn display_name
-  // náº¿u chÆ°a cÃ³ thÃ¬ láº¥y pháº§n trÆ°á»›c @ trong email
-  // náº¿u váº«n khÃ´ng cÃ³ thÃ¬ fallback "there"
+  // Tạo tên hiển thị:
+  // ưu tiên display_name
+  // nếu chưa có thì lấy phần trước @ trong email
+  // nếu vẫn không có thì fallback "there"
   const displayName = useMemo(() => {
     const rawName = user?.display_name || user?.email?.split("@")[0] || "there";
 
     return rawName.trim() || "there";
   }, [user?.display_name, user?.email]);
 
-  // TÃ­nh % calories Ä‘Ã£ Äƒn so vá»›i target
-  // dÃ¹ng cho vÃ²ng trÃ²n progress
+  // Tính % calories đã ăn so với target
+  // dùng cho vòng tròn progress
   const calorieProgress = dashboardData
     ? Math.min(dashboardData.calories.logged / dashboardData.calories.target, 1)
     : 0;
 
-  // Kiá»ƒm tra hÃ´m nay cÃ³ Ä‘ang "Ä‘Ãºng plan" khÃ´ng
-  // true náº¿u calories > 0 vÃ  chÆ°a vÆ°á»£t target
+  // Kiểm tra hôm nay có đang "đúng plan" không
+  // true nếu calories > 0 và chưa vượt target
   const onTrack = dashboardData
     ? dashboardData.calories.logged > 0 &&
       dashboardData.calories.logged <= dashboardData.calories.target
     : true;
 
-  // Ref chá»‘ng viá»‡c gá»i API nhiá»u láº§n cÃ¹ng lÃºc
-  // náº¿u Ä‘ang fetch rá»“i thÃ¬ khÃ´ng fetch tiáº¿p
+  // Ref chống việc gọi API nhiều lần cùng lúc
+  // nếu đang fetch rồi thì không fetch tiếp
   const isFetchingRef = useRef(false);
 
-  // Ref kiá»ƒm tra component cÃ²n mounted khÃ´ng
-  // trÃ¡nh setState khi component Ä‘Ã£ unmount
+  // Ref kiểm tra component còn mounted không
+  // tránh setState khi component đã unmount
   const mountedRef = useRef(true);
 
-  // useFocusEffect cháº¡y má»—i khi screen Home Ä‘Æ°á»£c focus
-  // vÃ­ dá»¥:
-  // - vá»«a login xong
-  // - tá»« mÃ n log meal quay vá»
-  // - tá»« mÃ n water quay vá»
+  // useFocusEffect chạy mỗi khi screen Home được focus
+  // ví dụ:
+  // - vừa login xong
+  // - từ màn log meal quay về
+  // - từ màn water quay về
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
 
-      // ÄÃ¡nh dáº¥u component Ä‘ang active
+      // Đánh dấu component đang active
       mountedRef.current = true;
 
       async function loadDashboard() {
-        // Náº¿u Ä‘ang fetch thÃ¬ dá»«ng
-        // trÃ¡nh duplicate request
+        // Nếu đang fetch thì dừng
+        // tránh duplicate request
         if (isFetchingRef.current) return;
 
-        // ÄÃ¡nh dáº¥u báº¯t Ä‘áº§u fetch
+        // Đánh dấu bắt đầu fetch
         isFetchingRef.current = true;
 
-        // Cháº·n fetch náº¿u auth chÆ°a sáºµn sÃ ng
-        // vÃ­ dá»¥ token chÆ°a restore xong
+        // Chặn fetch nếu auth chưa sẵn sàng
+        // ví dụ token chưa restore xong
         if (!isHydrated || !user?.id) {
-          console.warn("[HomeScreen] loadDashboard skipped â€” auth not ready");
+          console.warn("[HomeScreen] loadDashboard skipped — auth not ready");
 
-          // Reset láº¡i lock Ä‘á»ƒ láº§n sau cÃ²n fetch Ä‘Æ°á»£c
+          // Reset lại lock để lần sau còn fetch được
           isFetchingRef.current = false;
           return;
         }
 
-        // Náº¿u component Ä‘Ã£ unmount thÃ¬ khÃ´ng cháº¡y tiáº¿p
+        // Nếu component đã unmount thì không chạy tiếp
         if (!mountedRef.current) return;
 
         try {
-          // ===== BÆ¯á»šC 1: Láº¥y profile =====
+          // ===== BƯỚC 1: Lấy profile =====
           let profile: ProfileResponse | null = null;
           let profileError: any = null;
 
-          // Retry tá»‘i Ä‘a 2 láº§n náº¿u bá»‹ lá»—i 404 táº¡m thá»i
+          // Retry tối đa 2 lần nếu bị lỗi 404 tạm thời
           for (let attempt = 0; attempt < 2; attempt++) {
             try {
               profile = await getMyProfile({
@@ -338,13 +338,13 @@ export default function HomeScreen() {
                 route: "HomeScreen",
               });
 
-              // ThÃ nh cÃ´ng thÃ¬ reset lá»—i
+              // Thành công thì reset lỗi
               profileError = null;
               break;
             } catch (err: any) {
               profileError = err;
 
-              // Náº¿u láº§n Ä‘áº§u bá»‹ 404 thÃ¬ chá» 500ms rá»“i thá»­ láº¡i
+              // Nếu lần đầu bị 404 thì chờ 500ms rồi thử lại
               if (err?.status === 404 && attempt === 0) {
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 continue;
@@ -354,12 +354,12 @@ export default function HomeScreen() {
             }
           }
 
-          // Náº¿u váº«n lá»—i sau retry
+          // Nếu vẫn lỗi sau retry
           if (profileError) {
             console.warn("[HomeScreen] Profile fetch failed:", profileError);
 
-            // Táº¡o profile giáº£ Ä‘á»ƒ app khÃ´ng crash
-            // chá»‰ dÃ¹ng fallback render UI
+            // Tạo profile giả để app không crash
+            // chỉ dùng fallback render UI
             profile = {
               user_id: 0,
               display_name: "",
@@ -385,48 +385,48 @@ export default function HomeScreen() {
             };
           }
 
-          // Sau bÆ°á»›c nÃ y profile cháº¯c cháº¯n luÃ´n tá»“n táº¡i
-          // vÃ¬ hoáº·c fetch thÃ nh cÃ´ng, hoáº·c fallback data máº·c Ä‘á»‹nh
+          // Sau bước này profile chắc chắn luôn tồn tại
+          // vì hoặc fetch thành công, hoặc fallback data mặc định
           const safeProfile = profile!;
 
-          // Kiá»ƒm tra component cÃ²n active khÃ´ng
-          // náº¿u user Ä‘Ã£ rá»i mÃ n thÃ¬ khÃ´ng cháº¡y tiáº¿p
+          // Kiểm tra component còn active không
+          // nếu user đã rời màn thì không chạy tiếp
           if (!isActive) return;
 
-          // Fetch dá»¯ liá»‡u dashboard theo thá»© tá»± tuáº§n tá»± (sequential)
-          // LÃ½ do:
-          // - TrÃ¡nh race condition giá»¯a cÃ¡c API phá»¥ thuá»™c onboarding/profile
-          // - Náº¿u profile chÆ°a sáºµn sÃ ng thÃ¬ cÃ¡c API sau cÃ³ thá»ƒ fail (403/404)
+          // Fetch dữ liệu dashboard theo thứ tự tuần tự (sequential)
+          // Lý do:
+          // - Tránh race condition giữa các API phụ thuộc onboarding/profile
+          // - Nếu profile chưa sẵn sàng thì các API sau có thể fail (403/404)
 
-          const today = getTodayKey(); // Láº¥y ngÃ y hiá»‡n táº¡i theo local timezone (yyyy-mm-dd)
+          const today = getTodayKey(); // Lấy ngày hiện tại theo local timezone (yyyy-mm-dd)
 
           // ===== STEP 2: HEALTH SUMMARY =====
-          // Láº¥y dá»¯ liá»‡u sá»©c khá»e tá»•ng quan:
+          // Lấy dữ liệu sức khỏe tổng quan:
           // BMI, BMR, TDEE, macro target, water target, latest weight...
           const health = await getHealthSummary();
 
-          // Náº¿u user Ä‘Ã£ rá»i mÃ n hÃ¬nh trong lÃºc chá» API tráº£ vá» thÃ¬ dá»«ng luÃ´n
+          // Nếu user đã rời màn hình trong lúc chờ API trả về thì dừng luôn
           if (!isActive) return;
 
           // ===== STEP 3: DAILY MEALS =====
-          // Láº¥y toÃ n bá»™ meal log cá»§a hÃ´m nay
-          // DÃ¹ng Ä‘á»ƒ tÃ­nh calories + macro Ä‘Ã£ Äƒn
+          // Lấy toàn bộ meal log của hôm nay
+          // Dùng để tính calories + macro đã ăn
           console.log("[HomeScreen] today =", today);
           const numericUserId = user?.id ? Number(user.id) : undefined;
           const meals = await getDailyMeals(today, numericUserId);
 
-          // Debug dá»¯ liá»‡u meals Ä‘á»ƒ kiá»ƒm tra backend tráº£ Ä‘Ãºng chÆ°a
+          // Debug dữ liệu meals để kiểm tra backend trả đúng chưa
           console.log(
             "[HomeScreen] mealsData =",
             JSON.stringify(meals, null, 2),
           );
 
-          // Náº¿u unmount thÃ¬ dá»«ng
+          // Nếu unmount thì dừng
           if (!isActive) return;
 
           // ===== STEP 4: WATER TRACKING =====
-          // Láº¥y dá»¯ liá»‡u lÆ°á»£ng nÆ°á»›c uá»‘ng trong ngÃ y
-          // Náº¿u backend chÆ°a cÃ³ target thÃ¬ fallback theo profile
+          // Lấy dữ liệu lượng nước uống trong ngày
+          // Nếu backend chưa có target thì fallback theo profile
           const water = await getDailyWater(
             today,
             safeProfile.water_target_ml ?? 2000,
@@ -436,68 +436,68 @@ export default function HomeScreen() {
           if (!isActive) return;
 
           // ===== STEP 5: AI ADVICE =====
-          // Gá»i AI Ä‘á»ƒ láº¥y gá»£i Ã½ dinh dÆ°á»¡ng
-          // Náº¿u backend tráº£ 403 (chÆ°a onboarding) thÃ¬ chá»‰ warning, khÃ´ng redirect
+          // Gọi AI để lấy gợi ý dinh dưỡng
+          // Nếu backend trả 403 (chưa onboarding) thì chỉ warning, không redirect
           const ai = await getAiAdvice();
 
           if (!isActive) return;
 
           // ===== STEP 6: CHALLENGES =====
-          // Láº¥y danh sÃ¡ch challenge user Ä‘Ã£ tham gia
+          // Lấy danh sách challenge user đã tham gia
           const myChallenges = await getMyChallenges();
 
-          // Láº¥y challenge Ä‘áº§u tiÃªn Ä‘á»ƒ hiá»ƒn thá»‹ trÃªn Home
+          // Lấy challenge đầu tiên để hiển thị trên Home
           const challenge = myChallenges.length > 0 ? myChallenges[0] : null;
 
           if (!isActive) return;
 
           // ===== STEP 7: DAILY MISSIONS =====
-          // Láº¥y nhiá»‡m vá»¥ háº±ng ngÃ y
-          // Náº¿u API chÆ°a tá»“n táº¡i thÃ¬ service fallback data cá»©ng
+          // Lấy nhiệm vụ hằng ngày
+          // Nếu API chưa tồn tại thì service fallback data cứng
           //
-          // Truyá»n meals/water/health tá»« cÃ¡c STEP trÃªn vÃ o
-          //    Ä‘á»ƒ mission service KHÃ”NG fetch láº¡i API.
-          //    TrÆ°á»›c Ä‘Ã¢y getTodayMissions() tá»± fetch láº¡i,
-          //    gÃ¢y duplicate /meals request â†' log 500 warning.
+          // Truyền meals/water/health từ các STEP trên vào
+          //    để mission service KHÔNG fetch lại API.
+          //    Trước đây getTodayMissions() tự fetch lại,
+          //    gây duplicate /meals request �' log 500 warning.
           // =======================================================
           const missionsData = await getTodayMissions(meals, water, health);
 
-          // Cáº­p nháº­t state mission
+          // Cập nhật state mission
           setMissions(missionsData);
 
           if (!isActive) return;
 
           // ===== STEP 8: STREAK =====
-          // Láº¥y chuá»—i ngÃ y giá»¯ thÃ³i quen
+          // Lấy chuỗi ngày giữ thói quen
           const streakData = await getStreak();
 
-          // Cáº­p nháº­t streak UI
+          // Cập nhật streak UI
           setStreak(streakData);
 
           if (!isActive) return;
 
           // ===== STEP 9: FRIENDS ACTIVITY =====
-          // Láº¥y hoáº¡t Ä‘á»™ng báº¡n bÃ¨ Ä‘á»ƒ hiá»ƒn thá»‹ motivation
+          // Lấy hoạt động bạn bè để hiển thị motivation
           const friendsData = await getFriendsActivity();
 
-          // Cáº­p nháº­t state
+          // Cập nhật state
           setFriendsActivity(friendsData);
 
           if (!isActive) return;
 
           // ===== STEP 10: NOTIFICATION =====
-          // Láº¥y sá»‘ notification chÆ°a Ä‘á»c
+          // Lấy số notification chưa đọc
           const unreadCount = await getUnreadNotifications();
 
-          // Update badge chuÃ´ng
+          // Update badge chuông
           setUnreadNotifications(unreadCount);
 
           if (!isActive) return;
 
           // ===== TARGET SETUP =====
-          // Æ¯u tiÃªn dá»¯ liá»‡u tá»« health API,
-          // náº¿u thiáº¿u thÃ¬ fallback profile,
-          // náº¿u váº«n thiáº¿u thÃ¬ fallback máº·c Ä‘á»‹nh
+          // Ưu tiên dữ liệu từ health API,
+          // nếu thiếu thì fallback profile,
+          // nếu vẫn thiếu thì fallback mặc định
           const calorie_target =
             health?.calorie_target ?? safeProfile.calorie_target ?? 2000;
 
@@ -514,19 +514,19 @@ export default function HomeScreen() {
             safeProfile.water_target_ml ?? health?.water_target_ml ?? 2000;
 
           // ===== WEIGHT DATA PARSING =====
-          // Xá»­ lÃ½ latest weight Ä‘á»ƒ hiá»ƒn thá»‹ "updated x days ago"
+          // Xử lý latest weight để hiển thị "updated x days ago"
           let weightData = null;
           const latestWeightObj = health?.latest_weight;
 
           if (latestWeightObj) {
             let daysAgo = 0;
 
-            // Náº¿u backend tráº£ sáºµn days_ago thÃ¬ dÃ¹ng luÃ´n
+            // Nếu backend trả sẵn days_ago thì dùng luôn
             if (latestWeightObj.days_ago !== undefined) {
               daysAgo = latestWeightObj.days_ago;
             }
 
-            // Náº¿u khÃ´ng cÃ³ thÃ¬ tá»± tÃ­nh tá»« logged_at
+            // Nếu không có thì tự tính từ logged_at
             else if (latestWeightObj.logged_at) {
               const todayObj = new Date(new Date().toLocaleDateString("en-CA"));
               const weightDateObj = new Date(latestWeightObj.logged_at);
@@ -551,7 +551,7 @@ export default function HomeScreen() {
           }
 
           // ===== MAP DASHBOARD STATE =====
-          // Gom toÃ n bá»™ data Ä‘á»ƒ render UI Home
+          // Gom toàn bộ data để render UI Home
           const mappedData: HomeDashboardData = {
             calories: {
               logged: meals.daily_totals.calories ?? 0,
@@ -583,13 +583,13 @@ export default function HomeScreen() {
 
             weight: weightData,
 
-            // Náº¿u AI cÃ³ message thÃ¬ Æ°u tiÃªn message, khÃ´ng thÃ¬ advice
+            // Nếu AI có message thì ưu tiên message, không thì advice
             insight: ai ? ai.message || ai.advice : null,
 
             challenge,
           };
 
-          // Cáº­p nháº­t toÃ n bá»™ dashboard UI
+          // Cập nhật toàn bộ dashboard UI
           setDashboardData(mappedData);
         } catch (error) {
           console.warn("[HomeScreen] Failed to load dashboard data:", error);
@@ -605,7 +605,7 @@ export default function HomeScreen() {
         mountedRef.current = false;
         isFetchingRef.current = false;
       };
-    }, [isHydrated, user?.id]),
+    }, [isHydrated, user]),
   );
 
   return (
@@ -619,7 +619,7 @@ export default function HomeScreen() {
           <View>
             <Text style={styles.hello}>Hello,</Text>
             <Text style={styles.name}>{displayName} 👋</Text>
-            <Text style={styles.sub}>Let's make today amazing</Text>
+            <Text style={styles.sub}>Let&apos;s make today amazing</Text>
           </View>
 
           <TouchableOpacity style={styles.bellBtn}>
@@ -711,8 +711,8 @@ export default function HomeScreen() {
               {(dashboardData?.calories.logged || 0) <= 0
                 ? "🍽️ Log your first meal to start tracking"
                 : onTrack
-                  ? "💚 You're on track! Keep it up"
-                  : "🔥 You're over today's calorie goal"}
+                  ? "✅ You're on track! Keep it up"
+                  : "⚠️ You're over today's calorie goal"}
             </Text>
           </View>
         </View>
@@ -752,9 +752,7 @@ export default function HomeScreen() {
           </Text>
 
           <View style={styles.streakBar}>
-            {(
-              streak?.weeklyProgress ?? []
-            ).map((done, i) => (
+            {(streak?.weeklyProgress ?? []).map((done, i) => (
               <View
                 key={i}
                 style={[styles.streakDot, done && { backgroundColor: "white" }]}
@@ -834,7 +832,7 @@ export default function HomeScreen() {
         </View>
 
         {/* FRIEND MOTIVATION */}
-        <Text style={styles.sectionTitle}>Stay Motivated 🔥</Text>
+        <Text style={styles.sectionTitle}>Stay Motivated 💪</Text>
 
         <TouchableOpacity
           activeOpacity={0.9}
@@ -845,7 +843,7 @@ export default function HomeScreen() {
               <Text style={styles.friendLabel}>Friends Motivation</Text>
               <Text style={styles.friendTitle}>
                 {friendsActivity?.activeCount != null
-                  ? `${friendsActivity.activeCount} friends active 💪`
+                  ? `${friendsActivity.activeCount} friends active 🔥`
                   : "No friends yet"}
               </Text>
               <Text style={styles.friendSub}>
@@ -902,14 +900,11 @@ export default function HomeScreen() {
           <Text style={styles.insightBadge}>AI Insight</Text>
 
           <Text style={styles.insightTitle}>
-            {dashboardData?.insight
-              ? "AI Recommendation"
-              : "No insights yet"}
+            {dashboardData?.insight ? "AI Recommendation" : "No insights yet"}
           </Text>
 
           <Text style={styles.insightSub}>
-            {dashboardData?.insight ||
-              "Check back after logging more meals"}
+            {dashboardData?.insight || "Check back after logging more meals"}
           </Text>
 
           <TouchableOpacity
@@ -969,9 +964,11 @@ function Macro({ label, value, color }: any) {
 function Mission({ text, done = false }: any) {
   return (
     <View style={styles.missionItem}>
-      {done
-        ? <CheckCircle size={20} color="#10B981" />
-        : <Circle size={20} color="#CBD5E1" />}
+      {done ? (
+        <CheckCircle size={20} color="#10B981" />
+      ) : (
+        <Circle size={20} color="#CBD5E1" />
+      )}
       <Text style={styles.missionText}>{text}</Text>
     </View>
   );
@@ -1491,4 +1488,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-

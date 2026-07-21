@@ -40,8 +40,10 @@ func NewMealService(
 }
 
 func (s *mealServiceImpl) LogMeal(ctx context.Context, cmd service.LogMealCommand) (*service.MealEntryResult, error) {
+	// Kiểm tra onboarding: chỉ chặn nếu profile thực sự không tồn tại,
+	// các lỗi DB khác được trả về nguyên dạng.
 	if _, err := s.profileRepo.FindByUserID(ctx, cmd.UserID); err != nil {
-		return nil, apperror.ErrOnboardingRequired.WithMessage("Vui lòng hoàn thành onboarding trước khi ghi nhật ký bữa ăn")
+		return nil, err
 	}
 	if err := validateLogMealCommand(cmd); err != nil {
 		return nil, err

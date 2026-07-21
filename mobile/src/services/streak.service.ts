@@ -1,5 +1,5 @@
-import { getDailyMeals, getDailyWater } from "./home.service";
 import { getLocalDateKey } from "@/lib/dateUtils";
+import { api } from "@/lib/apiClient";
 import type {
   StreakData,
   DailyMealsResponse,
@@ -8,15 +8,15 @@ import type {
 
 // =======================================================
 // Dữ liệu streak mặc định (fallback)
-// Nếu API lỗi thì UI vẫn có dữ liệu hiển thị
 // =======================================================
 const DEFAULT_STREAK: StreakData = {
-  current: 6,
-  weeklyProgress: [true, true, true, true, true, true, false],
+  current: 0,
+  weeklyProgress: [false, false, false, false, false, false, false],
 };
 
 // =======================================================
-// Lấy streak hiện tại cho HomeScreen
+// Lấy streak hiện tại cho HomeScreen.
+// Tính streak thực tế từ water history API (GET /water/history).
 // =======================================================
 export async function getStreak(
   meals?: DailyMealsResponse | null,
@@ -25,61 +25,80 @@ export async function getStreak(
   try {
     const today = getLocalDateKey();
 
-    // =========================================================
-    // Chỉ fetch những API chưa có dữ liệu từ HomeScreen
-    // ?? giữ nguyên giá trị nếu không null/undefined
-    // =========================================================
-    const [mealsRes, waterRes] = await Promise.allSettled([
-      meals ?? getDailyMeals(today),
-      water ?? getDailyWater(today),
-    ]);
+    // Tính ngày bắt đầu (7 ngày trước)
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 6);
+    const fromStr = fromDate.toLocaleDateString("en-CA");
 
-    const finalMeals = mealsRes.status === "fulfilled" ? mealsRes.value : null;
-    const finalWater = waterRes.status === "fulfilled" ? waterRes.value : null;
-
-    // =========================================================
-    // DEBUG: Log nguồn streak data
-    // =========================================================
-    console.log(
-      "[StreakService] source meals=",
-      finalMeals ? "API" : "null",
-      "water=",
-      finalWater ? "API" : "null",
-    );
-
-    // =========================================================
-    // Kiểm tra user có log meal hoặc water hôm nay không
-    // Nếu có ít nhất 1 bữa ăn hoặc 1 lần uống nước -> streak >= 1
-    // =========================================================
-    const hasMeal =
-      (finalMeals?.meals?.breakfast?.length ?? 0) +
-        (finalMeals?.meals?.lunch?.length ?? 0) +
-        (finalMeals?.meals?.dinner?.length ?? 0) +
-        (finalMeals?.meals?.snack?.length ?? 0) >
-      0;
-
-    const hasWater = (finalWater?.entries?.length ?? 0) > 0;
-
-    // =========================================================
-    // Nếu user có hoạt động hôm nay -> streak ít nhất 1
-    // =========================================================
-    if (hasMeal || hasWater) {
-      const result: StreakData = {
-        current: 1,
-        weeklyProgress: DEFAULT_STREAK.weeklyProgress,
-      };
-
-      console.log("[StreakService] built from real data:", result);
-      return result;
+    // Fetch water history 7 ngày
+    let waterHistory: { date: string; total_ml: number }[] = [];
+    try {
+      const res = await api.get<{
+        items: { date: string; total_ml: number }[];
+      }>(`/water/history?from=${fromStr}&to=${today}`);
+      waterHistory = res?.items ?? [];
+    } catch {
+      console.warn("[StreakService] Water history fetch failed, using local data");
     }
 
-    // =========================================================
-    // Không có hoạt động hôm nay -> fallback DEFAULT_STREAK
-    // =========================================================
-    console.log("[StreakService] no activity today, using fallback");
-    return DEFAULT_STREAK;
+    // Tạo map ngày → has activity
+    const activityMap = new Map<string, boolean>();
+
+    // Từ water history
+    for (const item of waterHistory) {
+      if (item.total_ml > 0) {
+        activityMap.set(item.date, true);
+      }
+    }
+
+    // Cũng check today data từ meal/water local
+    const hasMeal =
+      (meals?.meals?.breakfast?.length ?? 0) +
+        (meals?.meals?.lunch?.length ?? 0) +
+        (meals?.meals?.dinner?.length ?? 0) +
+        (meals?.meals?.snack?.length ?? 0) > 0;
+    const hasWater = (water?.daily_total_ml ?? 0) > 0;
+
+    if (hasMeal || hasWater) {
+      activityMap.set(today, true);
+    }
+
+    // Tính streak: đếm số ngày liên tiếp từ today ngược về có activity
+    let current = 0;
+    const weeklyProgress: boolean[] = [];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateKey = d.toLocaleDateString("en-CA");
+      const hasActivity = activityMap.get(dateKey) === true;
+      weeklyProgress.unshift(hasActivity);
+
+      if (i === 0) {
+        // Today
+        if (hasActivity) {
+          current = 1;
+        }
+      } else if (current > 0 && hasActivity) {
+        current++;
+      } else if (!hasActivity && current > 0) {
+        // Streak đã bị đứt, không tăng nữa nhưng vẫn giữ current
+        // (chỉ break streak counting, không reset về 0)
+      }
+    }
+
+    const finalStreak = current > 0 ? current : 0;
+
+    console.log(
+      `[StreakService] Calculated streak: ${finalStreak} days, weeklyProgress=`,
+      weeklyProgress,
+    );
+
+    return {
+      current: finalStreak,
+      weeklyProgress,
+    };
   } catch (err: any) {
-    // Nếu API lỗi -> dùng fallback
     console.warn("[StreakService] Failed to load streak:", err);
     return DEFAULT_STREAK;
   }
