@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useMemo, useState, useRef } from "react";
+import React, { useCallback, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -538,10 +538,15 @@ export default function HomeScreen() {
               daysAgo = diffDays < 0 ? 0 : diffDays;
             }
 
-            // Chuáº©n hÃ³a dá»¯ liá»‡u weight
+            // Chuẩn hóa dữ liệu weight
             weightData = {
               latest_kg: latestWeightObj.weight_kg,
               days_ago: daysAgo,
+            };
+          } else if (safeProfile?.weight_kg) {
+            weightData = {
+              latest_kg: safeProfile.weight_kg,
+              days_ago: 0,
             };
           }
 
