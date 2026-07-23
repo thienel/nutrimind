@@ -1,9 +1,14 @@
 package router
 
 import (
+	"context"
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/thienel/tlog"
 
+	"nutrimind-backend/internal/infra/database"
 	"nutrimind-backend/internal/interface/api/handler"
 	"nutrimind-backend/internal/interface/api/middleware"
 )
@@ -51,9 +56,24 @@ func SetupRouter(
 	router := gin.New()
 	router.Use(gin.Recovery(), mw.CORS(), tlog.GinMiddleware(tlog.WithSkipPaths("/health")))
 
-	// Health check (no versioning)
+	// Health check (no versioning) — liveness only, deliberately does not touch
+	// the database so a DB outage never gets the container killed.
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
+	})
+
+	// Readiness: actually reaches the database. Returns 503 when unreachable.
+	router.GET("/health/db", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+
+		report := database.CheckHealth(ctx)
+
+		status := http.StatusOK
+		if !report.OK {
+			status = http.StatusServiceUnavailable
+		}
+		c.JSON(status, report)
 	})
 
 	api := router.Group("/api/v1")

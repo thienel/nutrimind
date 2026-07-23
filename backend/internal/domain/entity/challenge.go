@@ -14,11 +14,11 @@ const (
 )
 
 type Challenge struct {
-	ID           uint      `gorm:"primaryKey;autoIncrement"`
-	Name         string    `gorm:"not null"`
-	Type         string    `gorm:"not null"`
-	DurationDays int       `gorm:"column:duration_days;not null"`
-	Description  string    `gorm:"not null"`
+	ID           uint   `gorm:"primaryKey;autoIncrement"`
+	Name         string `gorm:"not null"`
+	Type         string `gorm:"not null"`
+	DurationDays int    `gorm:"column:duration_days;not null"`
+	Description  string `gorm:"not null"`
 	CreatedAt    time.Time
 }
 

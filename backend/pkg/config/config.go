@@ -29,9 +29,9 @@ type DatabaseConfig struct {
 
 // JWTConfig holds JWT authentication configuration
 type JWTConfig struct {
-	Secret              string `env:"JWT_SECRET" env-default:"change-this-secret-in-production-min-32-chars"`
-	AppExpiryDays       int    `env:"JWT_APP_EXPIRY_DAYS" env-default:"30"`
-	RefreshExpiryDays   int    `env:"JWT_REFRESH_EXPIRY_DAYS" env-default:"90"`
+	Secret            string `env:"JWT_SECRET" env-default:"change-this-secret-in-production-min-32-chars"`
+	AppExpiryDays     int    `env:"JWT_APP_EXPIRY_DAYS" env-default:"30"`
+	RefreshExpiryDays int    `env:"JWT_REFRESH_EXPIRY_DAYS" env-default:"90"`
 }
 
 // LogConfig holds logging configuration
@@ -74,14 +74,14 @@ type SMTPConfig struct {
 
 // Config holds all application configuration
 type Config struct {
-	Server    ServerConfig
-	Database  DatabaseConfig
-	JWT       JWTConfig
-	Google    GoogleConfig
-	OpenAI    OpenAIConfig
-	Firebase  FirebaseConfig
-	SMTP      SMTPConfig
-	Log       LogConfig
+	Server   ServerConfig
+	Database DatabaseConfig
+	JWT      JWTConfig
+	Google   GoogleConfig
+	OpenAI   OpenAIConfig
+	Firebase FirebaseConfig
+	SMTP     SMTPConfig
+	Log      LogConfig
 
 	RedisURL           string   `env:"REDIS_URL" env-default:"redis://localhost:6379"`
 	CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" env-default:"http://localhost:3000"`

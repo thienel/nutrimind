@@ -17,6 +17,10 @@ import (
 var (
 	db   *gorm.DB
 	once sync.Once
+
+	// dsn is kept so health checks can open a brand-new connection with the
+	// same credentials the pool was built with.
+	dsn string
 )
 
 // Init initializes the GORM database connection and runs AutoMigrate
@@ -24,7 +28,7 @@ func Init(cfg *config.DatabaseConfig) error {
 	var initErr error
 
 	once.Do(func() {
-		dsn := fmt.Sprintf(
+		dsn = fmt.Sprintf(
 			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
 			cfg.Host,
 			cfg.Port,
