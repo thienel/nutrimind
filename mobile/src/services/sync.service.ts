@@ -185,7 +185,7 @@ export class SyncService {
                   m.food_name === p.food_name &&
                   // Server trả về UPPERCASE, local DB lưu lowercase → so sánh sau khi upper
                   m.meal_type?.toUpperCase() ===
-                    String(p.meal_type).toUpperCase(),
+                  String(p.meal_type).toUpperCase(),
               );
               if (existing?.id) duplicateServerId = existing.id;
             } else if (item.entity_type === "water") {
