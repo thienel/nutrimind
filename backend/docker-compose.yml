@@ -3,11 +3,16 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: nutrimind
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${DB_USER:-postgres}
+      # Required — no default, so a missing/empty DB_PASSWORD fails the build
+      # loudly instead of silently booting Postgres with a guessable password.
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-nutrimind}
+    # No published ports: only services on this compose network reach Postgres.
+    # Exposing 5432 on 0.0.0.0 previously let internet bots brute-force the
+    # postgres login. To reach the DB from the host, tunnel over SSH instead.
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +24,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # Same reasoning as Postgres: no host port, reachable only inside the
+    # compose network. It was previously open on 0.0.0.0:6379 with no auth.
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     healthcheck:
